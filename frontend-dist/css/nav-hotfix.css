@@ -1,0 +1,221 @@
+.cfib-main-nav {
+  --cfib-nav-bg: var(--toolbar-button-bg-color, hsla(0, 0%, 100%, .82));
+  --cfib-nav-text: var(--admin-container-color, #333);
+  --cfib-nav-accent: var(--tabs-switcher-accent-color, #409eff);
+  --cfib-nav-border: rgba(64, 158, 255, .22);
+  --cfib-nav-shadow: var(--toolbar-button-shadow, 0 4px 18px rgba(0, 0, 0, .12));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  max-width: calc(100vw - 28px);
+  padding: 4px;
+  border: 1px solid var(--cfib-nav-border);
+  border-radius: 14px;
+  background: var(--cfib-nav-bg);
+  color: var(--cfib-nav-text);
+  box-shadow: var(--cfib-nav-shadow);
+  backdrop-filter: blur(18px) saturate(170%);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  box-sizing: border-box;
+  overflow-x: auto;
+  scrollbar-width: none;
+  z-index: 2200;
+}
+
+.cfib-main-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.cfib-nav-item,
+.cfib-actions-trigger {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color .2s ease, color .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+
+.cfib-nav-item:hover,
+.cfib-actions-trigger:hover {
+  background: var(--upload-action-btn-hover-bg, rgba(64, 158, 255, .12));
+  color: var(--cfib-nav-accent);
+}
+
+.cfib-nav-item.is-active {
+  color: var(--cfib-nav-accent);
+  background: linear-gradient(135deg, rgba(64, 158, 255, .14), rgba(56, 189, 248, .22));
+  box-shadow: inset 0 0 0 1px rgba(64, 158, 255, .22);
+}
+
+.cfib-nav-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  color: currentColor;
+}
+
+.cfib-upload-nav {
+  position: fixed;
+  top: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.cfib-tabs-hotfix {
+  position: static;
+  transform: none;
+  width: auto;
+  max-width: none;
+  z-index: 2200;
+}
+
+.cfib-tabs-hotfix .cfib-admin-nav {
+  position: fixed;
+  top: 82px;
+  left: 50%;
+  max-width: calc(100vw - 28px);
+  transform: translateX(-50%);
+}
+
+.cfib-tabs-hotfix .page-switcher {
+  display: none !important;
+}
+
+.cfib-upload-actions {
+  position: relative;
+}
+
+.cfib-upload-actions-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  display: none;
+  min-width: 156px;
+  padding: 6px;
+  border: 1px solid var(--cfib-nav-border);
+  border-radius: 12px;
+  background: var(--cfib-nav-bg);
+  box-shadow: var(--toolbar-button-shadow-hover, 0 8px 28px rgba(0, 0, 0, .16));
+  backdrop-filter: blur(18px) saturate(170%);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+}
+
+.cfib-upload-actions.is-open .cfib-upload-actions-panel {
+  display: grid;
+  gap: 2px;
+}
+
+.cfib-action-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cfib-action-item:hover {
+  background: var(--upload-action-btn-hover-bg, rgba(64, 158, 255, .12));
+  color: var(--cfib-nav-accent);
+}
+
+.quick-toolbar[data-v-060c1790] {
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+  box-shadow: none !important;
+}
+
+html.dark .cfib-main-nav {
+  --cfib-nav-bg: rgba(30, 30, 30, .82);
+  --cfib-nav-text: var(--admin-container-color, #e4e7ed);
+  --cfib-nav-border: rgba(64, 158, 255, .26);
+}
+
+@media (max-width: 1180px) {
+  .cfib-tabs-hotfix {
+    position: static;
+    transform: none;
+  }
+
+  .cfib-tabs-hotfix .cfib-admin-nav {
+    top: 82px;
+  }
+
+  .cfib-main-nav {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 1080px) {
+  .cfib-upload-nav {
+    top: 78px;
+  }
+}
+
+@media (max-width: 768px) {
+  .cfib-upload-nav {
+    top: 72px;
+  }
+
+  .cfib-tabs-hotfix {
+    top: 106px;
+  }
+
+  .cfib-tabs-hotfix .cfib-admin-nav {
+    top: 106px;
+  }
+
+  .cfib-main-nav {
+    gap: 2px;
+    padding: 3px;
+    border-radius: 12px;
+  }
+
+  .cfib-nav-item,
+  .cfib-actions-trigger {
+    min-height: 30px;
+    padding: 0 9px;
+    gap: 5px;
+    font-size: 12px;
+  }
+
+  .cfib-nav-icon {
+    width: 14px;
+    height: 14px;
+    flex-basis: 14px;
+  }
+
+  .cfib-upload-actions-panel {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
