@@ -178,9 +178,7 @@
     var wrap = document.createElement("div");
     wrap.className = "cfib-admin-actions";
     var actions = [
-      { key: "trash", icon: icons.trash },
-      { key: "restoreTrash", icon: icons.restore, label: "restoreSelected" },
-      { key: "importTelegram", icon: icons.telegram }
+      { key: "trash", icon: icons.trash }
     ];
 
     actions.forEach(function (action) {
@@ -294,8 +292,36 @@
   function runAdminAction(action) {
     if (action === "trash") {
       openTrashView();
-      return;
     }
+  }
+
+  function makeFileModeActions() {
+    var wrap = document.createElement("div");
+    wrap.className = "cfib-file-mode-actions";
+    var actions = [
+      { key: "importTelegram", icon: icons.telegram, label: "importTelegram" },
+      { key: "restoreTrash", icon: icons.restore, label: "restoreSelected" }
+    ];
+
+    actions.forEach(function (action) {
+      var button = document.createElement("button");
+      button.className = "cfib-file-mode-btn";
+      button.type = "button";
+      button.dataset.fileModeAction = action.key;
+      button.title = text(action.label);
+      button.setAttribute("aria-label", text(action.label));
+      button.innerHTML = action.icon + '<span class="cfib-file-mode-label" data-label="' + action.label + '"></span>';
+      button.addEventListener("click", function (event) {
+        event.stopPropagation();
+        runFileModeAction(action.key);
+      });
+      wrap.appendChild(button);
+    });
+
+    return wrap;
+  }
+
+  function runFileModeAction(action) {
     if (action === "importTelegram") {
       importTelegramUpdates();
       return;
@@ -303,6 +329,53 @@
     if (action === "restoreTrash") {
       restoreSelectedTrashFiles();
     }
+  }
+
+  function ensureDashboardFileActions() {
+    var existing = document.querySelector(".cfib-file-mode-actions");
+    if (normalizedPath() !== "/dashboard") {
+      if (existing) existing.remove();
+      return;
+    }
+
+    var host = document.querySelector(".breadcrumb-container");
+    if (!host) return;
+
+    if (!existing || !host.contains(existing)) {
+      if (existing) existing.remove();
+      existing = makeFileModeActions();
+      var statsBadge = host.querySelector(".stats-badge");
+      if (statsBadge) {
+        host.insertBefore(existing, statsBadge);
+      } else {
+        host.appendChild(existing);
+      }
+    }
+
+    updateFileModeActions(existing);
+  }
+
+  function updateFileModeActions(wrap) {
+    var proxy = findDashboardProxy();
+    var trashMode = isTrashMode(proxy);
+    var selectedCount = proxy && Array.isArray(proxy.selectedFiles) ? proxy.selectedFiles.filter(function (file) {
+      return file && !file.isFolder;
+    }).length : 0;
+
+    if (proxy) patchDashboardTrashDelete(proxy);
+
+    wrap.querySelectorAll("[data-file-mode-action]").forEach(function (button) {
+      var action = button.dataset.fileModeAction;
+      var labelKey = action === "restoreTrash" ? "restoreSelected" : action;
+      button.title = text(labelKey);
+      button.setAttribute("aria-label", text(labelKey));
+      button.hidden = action === "restoreTrash" && !trashMode;
+      button.disabled = action === "restoreTrash" && selectedCount === 0;
+    });
+
+    wrap.querySelectorAll("[data-label]").forEach(function (node) {
+      node.textContent = text(node.dataset.label);
+    });
   }
 
   function findDashboardProxy() {
@@ -732,20 +805,14 @@
   function updateAdminActions(nav) {
     var proxy = findDashboardProxy();
     var trashMode = isTrashMode(proxy) || pendingDashboardMode === "trash" || getSessionValue(dashboardModeStorageKey) === "trash";
-    var selectedCount = proxy && Array.isArray(proxy.selectedFiles) ? proxy.selectedFiles.filter(function (file) {
-      return file && !file.isFolder;
-    }).length : 0;
 
     if (proxy) patchDashboardTrashDelete(proxy);
 
     nav.querySelectorAll("[data-admin-action]").forEach(function (button) {
       var action = button.dataset.adminAction;
-      var labelKey = action === "restoreTrash" ? "restoreSelected" : action;
-      button.title = text(labelKey);
-      button.setAttribute("aria-label", text(labelKey));
+      button.title = text(action);
+      button.setAttribute("aria-label", text(action));
       button.classList.toggle("is-active", action === "trash" && trashMode);
-      button.hidden = action === "restoreTrash" && !trashMode;
-      button.disabled = action === "restoreTrash" && selectedCount === 0;
     });
   }
 
@@ -797,6 +864,7 @@
     ensureUploadNav();
     applyPendingDashboardMode();
     flushPendingDashboardRefresh();
+    ensureDashboardFileActions();
     ensureAdminNav();
     document.querySelectorAll(".cfib-main-nav").forEach(updateNav);
   }
