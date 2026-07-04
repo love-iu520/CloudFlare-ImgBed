@@ -13,6 +13,7 @@ import { HuggingFaceAPI } from "../utils/storage/huggingfaceAPI";
 import { WebDAVAPI } from "../utils/storage/webdavAPI";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getDatabase } from '../utils/databaseAdapter.js';
+import { buildTelegramSourceGroup } from '../utils/sourceGroup.js';
 
 
 export async function onRequest(context) {  // Contents of context object
@@ -533,8 +534,10 @@ async function uploadFileToTelegram(context, fullId, metadata, fileExt, fileName
         try {
             metadata.Channel = "TelegramNew";
             metadata.ChannelName = tgChannel.name;
+            metadata.SourceGroup = buildTelegramSourceGroup(tgChannel.name);
 
             metadata.TgFileId = id;
+            metadata.TgMessageId = fileInfo.message_id;
             await db.put(fullId, "", {
                 metadata: metadata,
             });

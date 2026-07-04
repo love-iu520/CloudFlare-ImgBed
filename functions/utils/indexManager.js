@@ -38,6 +38,7 @@
  */
 
 import { getDatabase, checkDatabaseConfig } from './databaseAdapter.js';
+import { getSourceGroupKey } from './sourceGroup.js';
 
 const INDEX_KEY = 'manage@index';
 const INDEX_META_KEY = 'manage@index@meta'; // 索引元数据键
@@ -499,6 +500,7 @@ export async function readIndex(context, options = {}) {
             label = [],
             fileType = [],
             channelName = [],
+            sourceGroup = [],
             includeTags = [],
             excludeTags = [],
             countOnly = false,
@@ -512,6 +514,7 @@ export async function readIndex(context, options = {}) {
         const labelArr = Array.isArray(label) ? label : (label ? [label] : []);
         const fileTypeArr = Array.isArray(fileType) ? fileType : (fileType ? [fileType] : []);
         const channelNameArr = Array.isArray(channelName) ? channelName : (channelName ? [channelName] : []);
+        const sourceGroupArr = Array.isArray(sourceGroup) ? sourceGroup : (sourceGroup ? [sourceGroup] : []);
 
         // 处理目录满足无头有尾的格式，根目录为空
         const dirPrefix = directory === '' || directory.endsWith('/') ? directory : directory + '/';
@@ -529,6 +532,11 @@ export async function readIndex(context, options = {}) {
         }
 
         let filteredFiles = index.files;
+
+        // 默认隐藏回收站文件；显式 listType=Trash 时才展示
+        if (listTypeArr.length === 0) {
+            filteredFiles = filteredFiles.filter(file => file.metadata?.ListType !== 'Trash');
+        }
 
         // 目录过滤
         if (directory) {
@@ -645,6 +653,14 @@ export async function readIndex(context, options = {}) {
                         return fileChannelName === filterValue;
                     }
                 });
+            });
+        }
+
+        // 来源分组筛选（如 telegram:频道名），不改变用户标签和物理目录
+        if (sourceGroupArr.length > 0) {
+            filteredFiles = filteredFiles.filter(file => {
+                const fileSourceGroupKey = getSourceGroupKey(file.metadata);
+                return sourceGroupArr.some(groupKey => fileSourceGroupKey === groupKey);
             });
         }
 

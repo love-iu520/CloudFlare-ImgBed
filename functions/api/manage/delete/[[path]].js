@@ -1,16 +1,20 @@
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { purgeCFCache, purgeRandomFileListCache, purgePublicFileListCache } from "../../../utils/purgeCache";
-import { removeFileFromIndex, batchRemoveFilesFromIndex } from "../../../utils/indexManager.js";
+import { addFileToIndex, batchAddFilesToIndex, removeFileFromIndex, batchRemoveFilesFromIndex } from "../../../utils/indexManager.js";
 import { getDatabase } from '../../../utils/databaseAdapter.js';
 import { DiscordAPI } from '../../../utils/storage/discordAPI.js';
 import { HuggingFaceAPI } from '../../../utils/storage/huggingfaceAPI.js';
+import { TelegramAPI } from '../../../utils/storage/telegramAPI.js';
 import { WebDAVAPI } from '../../../utils/storage/webdavAPI.js';
+import { cleanPersistedMetadata } from '../../../utils/metadata/metadataSecurity.js';
 import {
     resolveDiscordCredentials,
     resolveHuggingFaceCredentials,
     resolveS3Credentials,
+    resolveTelegramCredentials,
     resolveWebDAVCredentials,
 } from '../../../utils/metadata/channelCredentials.js';
+import { markMetadataTrashed } from '../../../utils/trash.js';
 
 // CORS 跨域响应头
 const corsHeaders = {
@@ -24,6 +28,7 @@ export async function onRequest(context) {
     const { request, env, params, waitUntil } = context;
 
     const url = new URL(request.url);
+    const permanent = url.searchParams.get('permanent') === 'true';
 
     // 读取folder参数，判断是否为文件夹删除请求
     const folder = url.searchParams.get('folder');
@@ -36,6 +41,8 @@ export async function onRequest(context) {
             }];
 
             const deletedFiles = [];
+            const indexFiles = [];
+            const missingFiles = [];
             const failedFiles = [];
 
             while (folderQueue.length > 0) {
@@ -56,9 +63,17 @@ export async function onRequest(context) {
                     const fileId = file.name;
                     const cdnUrl = `https://${url.hostname}/file/${fileId}`;
 
-                    const success = await deleteFile(env, fileId, cdnUrl, url);
-                    if (success) {
+                    const result = permanent
+                        ? { success: await deleteFile(env, fileId, cdnUrl, url) }
+                        : await trashFile(env, fileId, cdnUrl, url);
+
+                    if (result.success) {
                         deletedFiles.push(fileId);
+                        if (!permanent && result.metadata) {
+                            indexFiles.push({ fileId, metadata: result.metadata });
+                        } else if (!permanent && result.missing) {
+                            missingFiles.push(fileId);
+                        }
                     } else {
                         failedFiles.push(fileId);
                     }
@@ -75,12 +90,23 @@ export async function onRequest(context) {
 
             // 批量从索引中删除文件
             if (deletedFiles.length > 0) {
-                waitUntil(batchRemoveFilesFromIndex(context, deletedFiles));
+                if (permanent) {
+                    waitUntil(batchRemoveFilesFromIndex(context, deletedFiles));
+                } else {
+                    if (indexFiles.length > 0) {
+                        waitUntil(batchAddFilesToIndex(context, indexFiles));
+                    }
+                    if (missingFiles.length > 0) {
+                        waitUntil(batchRemoveFilesFromIndex(context, missingFiles));
+                    }
+                }
             }
 
             return new Response(JSON.stringify({
                 success: true,
-                deleted: deletedFiles,
+                permanent,
+                deleted: permanent ? deletedFiles : [],
+                trashed: permanent ? [] : deletedFiles,
                 failed: failedFiles
             }), {
                 headers: { 'Content-Type': 'application/json', ...corsHeaders }
@@ -104,17 +130,26 @@ export async function onRequest(context) {
         const fileId = params.path.split(',').join('/');
         const cdnUrl = `https://${url.hostname}/file/${fileId}`;
 
-        const success = await deleteFile(env, fileId, cdnUrl, url);
-        if (!success) {
+        const result = permanent
+            ? { success: await deleteFile(env, fileId, cdnUrl, url) }
+            : await trashFile(env, fileId, cdnUrl, url);
+
+        if (!result.success) {
             throw new Error('Delete file failed');
-        } else {
+        } else if (permanent) {
             // 从索引中删除文件
+            waitUntil(removeFileFromIndex(context, fileId));
+        } else if (result.metadata) {
+            waitUntil(addFileToIndex(context, fileId, result.metadata));
+        } else if (result.missing) {
             waitUntil(removeFileFromIndex(context, fileId));
         }
 
         return new Response(JSON.stringify({
             success: true,
-            fileId: fileId
+            fileId: fileId,
+            permanent,
+            trashed: !permanent
         }), {
             headers: { 'Content-Type': 'application/json', ...corsHeaders }
         });
@@ -126,6 +161,28 @@ export async function onRequest(context) {
             status: 400,
             headers: { 'Content-Type': 'application/json', ...corsHeaders }
         });
+    }
+}
+
+async function trashFile(env, fileId, cdnUrl, url) {
+    try {
+        const db = getDatabase(env);
+        const img = await db.getWithMetadata(fileId);
+
+        if (!img) {
+            console.warn(`File ${fileId} not found in database, skipping trash`);
+            return { success: true, missing: true };
+        }
+
+        const metadata = cleanPersistedMetadata(markMetadataTrashed(img.metadata || {}));
+        await db.put(fileId, img.value || '', { metadata });
+
+        await purgeFileCaches(env, fileId, cdnUrl, url);
+
+        return { success: true, metadata };
+    } catch (e) {
+        console.error('Trash file failed:', e);
+        return { success: false };
     }
 }
 
@@ -158,6 +215,12 @@ async function deleteFile(env, fileId, cdnUrl, url) {
             await deleteDiscordFile(env, img);
         }
 
+        // Telegram 渠道的图片，需要删除 Telegram 频道中对应的消息
+        if (img.metadata?.Channel === 'TelegramNew') {
+            const deleted = await deleteTelegramFile(env, img);
+            if (!deleted) return false;
+        }
+
         // HuggingFace 渠道的图片，需要删除 HuggingFace 中对应的文件
         if (img.metadata?.Channel === 'HuggingFace') {
             await deleteHuggingFaceFile(env, img);
@@ -172,19 +235,21 @@ async function deleteFile(env, fileId, cdnUrl, url) {
         // 注意：容量统计现在由索引自动维护，删除文件后索引更新时会自动重新计算
         await db.delete(fileId);
 
-        // 清除CDN缓存
-        await purgeCFCache(env, cdnUrl);
-
-        // 清除 api/randomFileList 等API缓存
-        const normalizedFolder = fileId.split('/').slice(0, -1).join('/');
-        await purgeRandomFileListCache(url.origin, normalizedFolder);
-        await purgePublicFileListCache(url.origin, normalizedFolder);
+        await purgeFileCaches(env, fileId, cdnUrl, url);
 
         return true;
     } catch (e) {
         console.error('Delete file failed:', e);
         return false;
     }
+}
+
+async function purgeFileCaches(env, fileId, cdnUrl, url) {
+    await purgeCFCache(env, cdnUrl);
+
+    const normalizedFolder = fileId.split('/').slice(0, -1).join('/');
+    await purgeRandomFileListCache(url.origin, normalizedFolder);
+    await purgePublicFileListCache(url.origin, normalizedFolder);
 }
 
 // 删除 S3 渠道的图片
@@ -213,6 +278,59 @@ async function deleteS3File(env, img) {
     } catch (error) {
         console.error("S3 Delete Failed:", error);
         return false;
+    }
+}
+
+// 删除 Telegram 渠道的图片（删除 Telegram 消息）
+async function deleteTelegramFile(env, img) {
+    const db = getDatabase(env);
+    const telegramCredentials = await resolveTelegramCredentials(db, env, img.metadata);
+    const botToken = telegramCredentials.botToken;
+    const chatId = telegramCredentials.chatId;
+
+    if (!botToken || !chatId) {
+        console.warn('Telegram file missing channel credentials for deletion');
+        return false;
+    }
+
+    const telegramAPI = new TelegramAPI(botToken, telegramCredentials.proxyUrl || '');
+    const messageIds = getTelegramMessageIds(img);
+
+    if (messageIds.length === 0) {
+        console.warn('Telegram file missing message metadata for deletion; database record will still be removed');
+        return true;
+    }
+
+    try {
+        for (const messageId of messageIds) {
+            await telegramAPI.deleteMessage(chatId, messageId);
+        }
+        return true;
+    } catch (error) {
+        console.error("Telegram Delete Failed:", error);
+        return false;
+    }
+}
+
+function getTelegramMessageIds(img) {
+    if (img.metadata?.IsChunked === true) {
+        return parseTelegramChunks(img.value)
+            .map(chunk => chunk.messageId)
+            .filter(Boolean);
+    }
+
+    return img.metadata?.TgMessageId ? [img.metadata.TgMessageId] : [];
+}
+
+function parseTelegramChunks(value) {
+    if (!value || typeof value !== 'string') return [];
+
+    try {
+        const chunks = JSON.parse(value);
+        return Array.isArray(chunks) ? chunks : [];
+    } catch (error) {
+        console.warn('Failed to parse Telegram chunk metadata for deletion:', error.message);
+        return [];
     }
 }
 

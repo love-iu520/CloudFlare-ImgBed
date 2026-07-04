@@ -4,6 +4,7 @@ import {
 } from '../../utils/indexManager.js';
 import { getDatabase } from '../../utils/databaseAdapter.js';
 import { createMetadataViewContext, serializeFileRecordForManagement } from '../../utils/metadata/metadataView.js';
+import { getSourceGroupKey } from '../../utils/sourceGroup.js';
 
 // CORS 跨域响应头
 const corsHeaders = {
@@ -33,6 +34,7 @@ export async function onRequest(context) {
     let label = url.searchParams.get('label') || '';
     let fileType = url.searchParams.get('fileType') || '';
     let channelName = url.searchParams.get('channelName') || '';
+    let sourceGroup = url.searchParams.get('sourceGroup') || '';
 
     // 处理搜索关键字
     if (search) {
@@ -50,6 +52,7 @@ export async function onRequest(context) {
     const fileTypeArray = fileType ? fileType.split(',').map(t => t.trim()).filter(t => t) : [];
     const channelArray = channel ? channel.split(',').map(t => t.trim()).filter(t => t) : [];
     const channelNameArray = channelName ? channelName.split(',').map(t => t.trim()).filter(t => t) : [];
+    const sourceGroupArray = sourceGroup ? sourceGroup.split(',').map(t => t.trim()).filter(t => t) : [];
 
     // 处理目录参数
     if (dir) {
@@ -126,6 +129,7 @@ export async function onRequest(context) {
                 label: labelArray,
                 fileType: fileTypeArray,
                 channelName: channelNameArray,
+                sourceGroup: sourceGroupArray,
                 includeTags: includeTagsArray,
                 excludeTags: excludeTagsArray,
                 countOnly: true
@@ -151,6 +155,7 @@ export async function onRequest(context) {
             label: labelArray,
             fileType: fileTypeArray,
             channelName: channelNameArray,
+            sourceGroup: sourceGroupArray,
             includeTags: includeTagsArray,
             excludeTags: excludeTagsArray,
             includeSubdirFiles: recursive,
@@ -158,7 +163,12 @@ export async function onRequest(context) {
 
         // 索引读取失败，直接从 KV 中获取所有文件记录
         if (!result.success) {
-            const dbRecords = await getAllFileRecords(context.env, dir);
+            const dbRecords = await getAllFileRecords(context.env, dir, {
+                listType: listTypeArray,
+                sourceGroup: sourceGroupArray,
+                includeTags: includeTagsArray,
+                excludeTags: excludeTagsArray,
+            });
 
             return new Response(JSON.stringify({
                 files: dbRecords.files,
@@ -207,7 +217,7 @@ export async function onRequest(context) {
     }
 }
 
-async function getAllFileRecords(env, dir) {
+async function getAllFileRecords(env, dir, filters = {}) {
     const allRecords = [];
     let cursor = null;
 
@@ -238,6 +248,10 @@ async function getAllFileRecords(env, dir) {
 
                 // 跳过没有元数据的文件
                 if (!item.metadata || !item.metadata.TimeStamp) {
+                    continue;
+                }
+
+                if (!passesFallbackFilters(item.metadata, filters)) {
                     continue;
                 }
 
@@ -284,4 +298,38 @@ async function getAllFileRecords(env, dir) {
             error: error.message
         };
     }
+}
+
+function passesFallbackFilters(metadata = {}, filters = {}) {
+    const listTypeArr = filters.listType || [];
+    if (listTypeArr.length > 0) {
+        const fileListType = metadata.ListType;
+        const listTypeMatched = listTypeArr.some(lt => {
+            if (lt === 'None') {
+                return !fileListType || fileListType === '' || fileListType === 'None';
+            }
+            return fileListType === lt;
+        });
+        if (!listTypeMatched) return false;
+    } else if (metadata.ListType === 'Trash') {
+        return false;
+    }
+
+    const sourceGroupArr = filters.sourceGroup || [];
+    if (sourceGroupArr.length > 0 && !sourceGroupArr.includes(getSourceGroupKey(metadata))) {
+        return false;
+    }
+
+    const fileTags = (metadata.Tags || []).map(tag => String(tag).toLowerCase());
+    const includeTags = filters.includeTags || [];
+    if (includeTags.some(tag => !fileTags.includes(String(tag).toLowerCase()))) {
+        return false;
+    }
+
+    const excludeTags = filters.excludeTags || [];
+    if (excludeTags.some(tag => fileTags.includes(String(tag).toLowerCase()))) {
+        return false;
+    }
+
+    return true;
 }

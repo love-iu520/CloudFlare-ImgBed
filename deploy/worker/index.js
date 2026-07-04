@@ -33,6 +33,7 @@ import * as apiManageSysConfigSecurity from '../../functions/api/manage/sysConfi
 import * as apiManageSysConfigUpload from '../../functions/api/manage/sysConfig/upload.js';
 import * as apiManageTagsAutocomplete from '../../functions/api/manage/tags/autocomplete.js';
 import * as apiManageTagsBatch from '../../functions/api/manage/tags/batch.js';
+import * as apiManageTelegramImport from '../../functions/api/manage/telegram/import.js';
 import * as apiAuthAdminLogin from '../../functions/api/auth/adminLogin.js';
 import * as apiAuthLogin from '../../functions/api/auth/login.js';
 import * as apiAuthLogout from '../../functions/api/auth/logout.js';
@@ -42,6 +43,7 @@ import * as apiBingWallpaper_index from '../../functions/api/bing/wallpaper/inde
 import * as apiManageApiTokens from '../../functions/api/manage/apiTokens.js';
 import * as apiManageList from '../../functions/api/manage/list.js';
 import * as apiManageQuota from '../../functions/api/manage/quota.js';
+import * as apiManageSourceGroups from '../../functions/api/manage/source-groups.js';
 import * as apiPublicList from '../../functions/api/public/list.js';
 import * as uploadHuggingfaceCommitUpload from '../../functions/upload/huggingface/commitUpload.js';
 import * as uploadHuggingfaceCompleteMultipart from '../../functions/upload/huggingface/completeMultipart.js';
@@ -52,6 +54,7 @@ import * as apiFetchRes from '../../functions/api/fetchRes.js';
 import * as apiUserConfig from '../../functions/api/userConfig.js';
 import * as random_index from '../../functions/random/index.js';
 import * as upload_index from '../../functions/upload/index.js';
+import * as apiManageTrashRestoreCatchAll from '../../functions/api/manage/trash/restore/[[path]].js';
 import * as apiManageBlockCatchAll from '../../functions/api/manage/block/[[path]].js';
 import * as apiManageDeleteCatchAll from '../../functions/api/manage/delete/[[path]].js';
 import * as apiManageMetadataCatchAll from '../../functions/api/manage/metadata/[[path]].js';
@@ -83,6 +86,7 @@ const routes = [
     { path: '/api/manage/sysConfig/upload', module: apiManageSysConfigUpload, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/tags/autocomplete', module: apiManageTagsAutocomplete, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/tags/batch', module: apiManageTagsBatch, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/telegram/import', module: apiManageTelegramImport, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/auth/adminLogin', module: apiAuthAdminLogin, middlewares: [mw_api] },
     { path: '/api/auth/login', module: apiAuthLogin, middlewares: [mw_api] },
     { path: '/api/auth/logout', module: apiAuthLogout, middlewares: [mw_api] },
@@ -92,6 +96,7 @@ const routes = [
     { path: '/api/manage/apiTokens', module: apiManageApiTokens, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/list', module: apiManageList, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/quota', module: apiManageQuota, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/source-groups', module: apiManageSourceGroups, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/public/list', module: apiPublicList, middlewares: [mw_api] },
     { path: '/upload/huggingface/commitUpload', module: uploadHuggingfaceCommitUpload, middlewares: [mw_upload] },
     { path: '/upload/huggingface/completeMultipart', module: uploadHuggingfaceCompleteMultipart, middlewares: [mw_upload] },
@@ -102,6 +107,7 @@ const routes = [
     { path: '/api/userConfig', module: apiUserConfig, middlewares: [mw_api] },
     { path: '/random', module: random_index, middlewares: [mw_random] },
     { path: '/upload', module: upload_index, middlewares: [mw_upload] },
+    { path: '/api/manage/trash/restore/', module: apiManageTrashRestoreCatchAll, middlewares: [mw_api, mw_api_manage], catchAll: true },
     { path: '/api/manage/block/', module: apiManageBlockCatchAll, middlewares: [mw_api, mw_api_manage], catchAll: true },
     { path: '/api/manage/delete/', module: apiManageDeleteCatchAll, middlewares: [mw_api, mw_api_manage], catchAll: true },
     { path: '/api/manage/metadata/', module: apiManageMetadataCatchAll, middlewares: [mw_api, mw_api_manage], catchAll: true },

@@ -4,6 +4,7 @@ import { retryFailedChunks, cleanupFailedMultipartUploads, checkChunkUploadStatu
 import { S3Client, CompleteMultipartUploadCommand } from "@aws-sdk/client-s3";
 import { getDatabase } from '../utils/databaseAdapter.js';
 import { fetchPageConfig } from '../utils/sysConfig.js';
+import { buildTelegramSourceGroup } from '../utils/sourceGroup.js';
 
 // 处理分块合并
 export async function handleChunkMerge(context) {
@@ -450,6 +451,7 @@ async function mergeTelegramChunksInfo(context, uploadId, completedChunks, metad
         const chunks = sortedChunks.map(chunk => ({
             index: chunk.index,
             fileId: chunk.uploadResult.fileId,
+            messageId: chunk.uploadResult.messageId,
             size: chunk.uploadResult.size,
             fileName: chunk.uploadResult.fileName
         }));
@@ -460,6 +462,7 @@ async function mergeTelegramChunksInfo(context, uploadId, completedChunks, metad
         // 更新metadata
         metadata.Channel = "TelegramNew";
         metadata.ChannelName = tgChannel.name;
+        metadata.SourceGroup = buildTelegramSourceGroup(tgChannel.name);
         metadata.IsChunked = true;
         metadata.TotalChunks = completedChunks.length;
         metadata.FileSize = (totalSize / 1024 / 1024).toFixed(2);

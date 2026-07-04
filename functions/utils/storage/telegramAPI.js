@@ -61,6 +61,7 @@ export class TelegramAPI {
             file_id: file.file_id,
             file_name: file.file_name || file.file_unique_id,
             file_size: file.file_size,
+            message_id: responseData.result.message_id,
         });
 
         try {
@@ -137,6 +138,74 @@ export class TelegramAPI {
         });
 
         return response;
+    }
+
+    /**
+     * 拉取 Bot 近期更新。Telegram 仅保留近期更新，不能用它读取任意历史 message_id。
+     * @param {Object} options
+     * @param {number} options.offset - 确认过的 update_id + 1
+     * @param {number} options.limit - 单次拉取数量
+     * @param {Array<string>} options.allowedUpdates - 更新类型
+     * @returns {Promise<Array>} 更新数组
+     */
+    async getUpdates(options = {}) {
+        const body = {
+            timeout: 0,
+            limit: options.limit || 100,
+            allowed_updates: options.allowedUpdates || ['channel_post'],
+        };
+
+        if (options.offset !== undefined && options.offset !== null) {
+            body.offset = Number(options.offset);
+        }
+
+        const response = await fetch(`${this.baseURL}/getUpdates`, {
+            method: 'POST',
+            headers: {
+                ...this.defaultHeaders,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+
+        const responseData = await response.json().catch(() => null);
+        if (!response.ok || !responseData?.ok) {
+            throw new Error(responseData?.description || response.statusText || 'Telegram getUpdates failed');
+        }
+
+        return Array.isArray(responseData.result) ? responseData.result : [];
+    }
+
+    /**
+     * 删除 Telegram 消息
+     * @param {string} chatId - 聊天或频道 ID
+     * @param {number|string} messageId - 消息 ID
+     * @returns {Promise<boolean>} 删除成功或消息已不存在时返回 true
+     */
+    async deleteMessage(chatId, messageId) {
+        const response = await fetch(`${this.baseURL}/deleteMessage`, {
+            method: 'POST',
+            headers: {
+                ...this.defaultHeaders,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                chat_id: chatId,
+                message_id: Number(messageId)
+            })
+        });
+
+        const responseData = await response.json().catch(() => null);
+        if (response.ok && responseData?.ok) {
+            return true;
+        }
+
+        const description = responseData?.description || response.statusText || 'Telegram API error';
+        if (description.toLowerCase().includes('message to delete not found')) {
+            return true;
+        }
+
+        throw new Error(description);
     }
 
 }

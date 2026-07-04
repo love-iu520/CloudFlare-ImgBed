@@ -71,7 +71,7 @@
 
 .cfib-upload-nav {
   position: fixed;
-  top: 28px;
+  top: 24px;
   left: 50%;
   transform: translateX(-50%);
 }
@@ -86,7 +86,7 @@
 
 .cfib-tabs-hotfix .cfib-admin-nav {
   position: fixed;
-  top: 82px;
+  top: 24px;
   left: 50%;
   max-width: calc(100vw - 28px);
   transform: translateX(-50%);
@@ -143,6 +143,243 @@
   color: var(--cfib-nav-accent);
 }
 
+.cfib-modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 3000;
+}
+
+.cfib-modal.is-open {
+  display: flex;
+}
+
+.cfib-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, .42);
+}
+
+.cfib-modal-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(880px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 48px));
+  border: 1px solid var(--cfib-nav-border);
+  border-radius: 8px;
+  background: var(--admin-container-background, #fff);
+  color: var(--cfib-nav-text);
+  box-shadow: 0 24px 64px rgba(15, 23, 42, .24);
+  overflow: hidden;
+}
+
+.cfib-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 54px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--cfib-nav-border);
+}
+
+.cfib-modal-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.cfib-modal-close {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cfib-modal-close:hover {
+  background: var(--upload-action-btn-hover-bg, rgba(64, 158, 255, .12));
+  color: var(--cfib-nav-accent);
+}
+
+.cfib-modal-body {
+  padding: 16px 18px 18px;
+  overflow: auto;
+}
+
+.cfib-modal-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.cfib-modal-state,
+.cfib-modal-note,
+.cfib-modal-error {
+  padding: 14px 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.cfib-modal-error {
+  color: #dc2626;
+}
+
+.cfib-file-list,
+.cfib-result-list,
+.cfib-source-groups {
+  display: grid;
+  gap: 8px;
+}
+
+.cfib-file-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, .28);
+  border-radius: 8px;
+  background: rgba(248, 250, 252, .72);
+}
+
+.cfib-file-main {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.cfib-file-main strong,
+.cfib-file-main span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cfib-file-main strong {
+  font-size: 14px;
+}
+
+.cfib-file-main span {
+  font-size: 12px;
+  opacity: .68;
+}
+
+.cfib-file-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.cfib-file-tags span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(20, 184, 166, .12);
+  color: #0f766e;
+  font-size: 12px;
+  line-height: 1.2;
+  opacity: 1;
+}
+
+.cfib-file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.cfib-secondary-btn,
+.cfib-danger-btn,
+.cfib-source-group {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(148, 163, 184, .36);
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.cfib-secondary-btn:hover,
+.cfib-source-group:hover {
+  border-color: var(--cfib-nav-accent);
+  color: var(--cfib-nav-accent);
+}
+
+.cfib-danger-btn {
+  border-color: rgba(220, 38, 38, .26);
+  color: #dc2626;
+}
+
+.cfib-danger-btn:hover {
+  background: rgba(220, 38, 38, .08);
+}
+
+.cfib-import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.cfib-import-summary span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(64, 158, 255, .12);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.cfib-result-list div {
+  display: grid;
+  grid-template-columns: minmax(0, 180px) minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid rgba(148, 163, 184, .24);
+  font-size: 13px;
+}
+
+.cfib-result-list span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: .72;
+}
+
+.cfib-source-groups {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  margin-bottom: 14px;
+}
+
+.cfib-source-group {
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+}
+
 .quick-toolbar[data-v-060c1790] {
   width: 1px !important;
   height: 1px !important;
@@ -159,6 +396,17 @@ html.dark .cfib-main-nav {
   --cfib-nav-border: rgba(64, 158, 255, .26);
 }
 
+html.dark .cfib-modal-panel,
+html.dark .cfib-secondary-btn,
+html.dark .cfib-source-group {
+  background: #1f2937;
+}
+
+html.dark .cfib-file-row {
+  background: rgba(31, 41, 55, .76);
+  border-color: rgba(148, 163, 184, .22);
+}
+
 @media (max-width: 1180px) {
   .cfib-tabs-hotfix {
     position: static;
@@ -166,7 +414,7 @@ html.dark .cfib-main-nav {
   }
 
   .cfib-tabs-hotfix .cfib-admin-nav {
-    top: 82px;
+    top: 24px;
   }
 
   .cfib-main-nav {
@@ -217,5 +465,17 @@ html.dark .cfib-main-nav {
     right: auto;
     left: 50%;
     transform: translateX(-50%);
+  }
+
+  .cfib-modal {
+    padding: 12px;
+  }
+
+  .cfib-file-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cfib-file-actions {
+    justify-content: flex-start;
   }
 }
