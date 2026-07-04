@@ -142,6 +142,7 @@
       closeActionMenus();
       wrap.classList.toggle("is-open", isOpen);
       trigger.setAttribute("aria-expanded", String(isOpen));
+      if (isOpen) positionActionPanel(wrap);
     });
 
     wrap.querySelectorAll("[data-action]").forEach(function (button) {
@@ -174,6 +175,7 @@
       closeActionMenus();
       wrap.classList.toggle("is-open", isOpen);
       trigger.setAttribute("aria-expanded", String(isOpen));
+      if (isOpen) positionActionPanel(wrap);
     });
 
     wrap.querySelectorAll("[data-admin-action]").forEach(function (button) {
@@ -206,7 +208,38 @@
       wrap.classList.remove("is-open");
       var trigger = wrap.querySelector(".cfib-actions-trigger");
       if (trigger) trigger.setAttribute("aria-expanded", "false");
+      var panel = wrap.querySelector(".cfib-upload-actions-panel");
+      if (panel) {
+        panel.style.left = "";
+        panel.style.top = "";
+      }
     });
+  }
+
+  function positionActionPanel(wrap) {
+    var trigger = wrap.querySelector(".cfib-actions-trigger");
+    var panel = wrap.querySelector(".cfib-upload-actions-panel");
+    if (!trigger || !panel) return;
+
+    var triggerRect = trigger.getBoundingClientRect();
+    var panelRect = panel.getBoundingClientRect();
+    var margin = 8;
+    var panelWidth = panelRect.width || 180;
+    var left = Math.min(
+      window.innerWidth - panelWidth - margin,
+      Math.max(margin, triggerRect.right - panelWidth)
+    );
+    var top = Math.min(
+      window.innerHeight - margin,
+      triggerRect.bottom + margin
+    );
+
+    panel.style.left = left + "px";
+    panel.style.top = top + "px";
+  }
+
+  function positionOpenActionMenus() {
+    document.querySelectorAll(".cfib-upload-actions.is-open").forEach(positionActionPanel);
   }
 
   function clickQuickToolbarButton(index) {
@@ -559,6 +592,8 @@
   });
 
   document.addEventListener("click", closeActionMenus);
+  window.addEventListener("resize", positionOpenActionMenus);
+  window.addEventListener("scroll", positionOpenActionMenus, true);
   window.addEventListener("popstate", scheduleRefresh);
   window.addEventListener("storage", scheduleRefresh);
   new MutationObserver(scheduleRefresh).observe(document.documentElement, { childList: true, subtree: true });

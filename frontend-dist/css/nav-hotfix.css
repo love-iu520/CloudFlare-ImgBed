@@ -101,9 +101,9 @@
 }
 
 .cfib-upload-actions-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
+  position: fixed;
+  top: 0;
+  left: 0;
   display: none;
   min-width: 156px;
   padding: 6px;
@@ -113,6 +113,7 @@
   box-shadow: var(--toolbar-button-shadow-hover, 0 8px 28px rgba(0, 0, 0, .16));
   backdrop-filter: blur(18px) saturate(170%);
   -webkit-backdrop-filter: blur(18px) saturate(170%);
+  z-index: 3200;
 }
 
 .cfib-upload-actions.is-open .cfib-upload-actions-panel {
@@ -459,12 +460,6 @@ html.dark .cfib-file-row {
     width: 14px;
     height: 14px;
     flex-basis: 14px;
-  }
-
-  .cfib-upload-actions-panel {
-    right: auto;
-    left: 50%;
-    transform: translateX(-50%);
   }
 
   .cfib-modal {
