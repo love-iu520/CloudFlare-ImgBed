@@ -21,7 +21,7 @@
       logout: "退出登录",
       trash: "回收站",
       importTelegram: "导入 Telegram",
-      sourceGroups: "来源分组",
+      sourceGroups: "Telegram 来源",
       close: "关闭",
       restore: "恢复",
       permanentDelete: "永久删除",
@@ -45,7 +45,7 @@
       logout: "Logout",
       trash: "Trash",
       importTelegram: "Import Telegram",
-      sourceGroups: "Source Groups",
+      sourceGroups: "Telegram Sources",
       close: "Close",
       restore: "Restore",
       permanentDelete: "Delete Forever",
@@ -158,32 +158,25 @@
 
   function makeAdminActions() {
     var wrap = document.createElement("div");
-    wrap.className = "cfib-upload-actions cfib-admin-actions";
-    wrap.innerHTML =
-      '<button class="cfib-actions-trigger" type="button" aria-expanded="false">' +
-      icons.more + '<span class="cfib-nav-label" data-label="more"></span></button>' +
-      '<div class="cfib-upload-actions-panel" role="menu">' +
-      '<button class="cfib-action-item" type="button" data-admin-action="trash" role="menuitem">' + icons.trash + '<span data-label="trash"></span></button>' +
-      '<button class="cfib-action-item" type="button" data-admin-action="importTelegram" role="menuitem">' + icons.telegram + '<span data-label="importTelegram"></span></button>' +
-      '<button class="cfib-action-item" type="button" data-admin-action="sourceGroups" role="menuitem">' + icons.layers + '<span data-label="sourceGroups"></span></button>' +
-      '</div>';
+    wrap.className = "cfib-admin-actions";
+    var actions = [
+      { key: "trash", icon: icons.trash },
+      { key: "importTelegram", icon: icons.telegram },
+      { key: "sourceGroups", icon: icons.layers }
+    ];
 
-    var trigger = wrap.querySelector(".cfib-actions-trigger");
-    trigger.addEventListener("click", function (event) {
-      event.stopPropagation();
-      var isOpen = !wrap.classList.contains("is-open");
-      closeActionMenus();
-      wrap.classList.toggle("is-open", isOpen);
-      trigger.setAttribute("aria-expanded", String(isOpen));
-      if (isOpen) positionActionPanel(wrap);
-    });
-
-    wrap.querySelectorAll("[data-admin-action]").forEach(function (button) {
+    actions.forEach(function (action) {
+      var button = document.createElement("button");
+      button.className = "cfib-admin-action-btn";
+      button.type = "button";
+      button.dataset.adminAction = action.key;
+      button.innerHTML = action.icon + '<span class="cfib-nav-label" data-label="' + action.key + '"></span>';
       button.addEventListener("click", function (event) {
         event.stopPropagation();
         closeActionMenus();
-        runAdminAction(button.dataset.adminAction);
+        runAdminAction(action.key);
       });
+      wrap.appendChild(button);
     });
 
     return wrap;

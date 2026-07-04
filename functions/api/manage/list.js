@@ -4,7 +4,11 @@ import {
 } from '../../utils/indexManager.js';
 import { getDatabase } from '../../utils/databaseAdapter.js';
 import { createMetadataViewContext, serializeFileRecordForManagement } from '../../utils/metadata/metadataView.js';
-import { getSourceGroupKey } from '../../utils/sourceGroup.js';
+import { getSourceGroup, getSourceGroupKey } from '../../utils/sourceGroup.js';
+
+const TELEGRAM_VIRTUAL_ROOT = 'telegram/';
+const TELEGRAM_SOURCE_PREFIX = 'telegram:';
+const NO_SOURCE_GROUP_MATCH = '__cfib_no_source_group_match__';
 
 // CORS 跨域响应头
 const corsHeaders = {
@@ -66,6 +70,13 @@ export async function onRequest(context) {
         dir += '/';
     }
 
+    const virtualTelegramChannel = getVirtualTelegramChannelName(dir);
+    const effectiveDir = virtualTelegramChannel ? '' : dir;
+    const effectiveSourceGroupArray = virtualTelegramChannel
+        ? applyVirtualTelegramSourceGroup(sourceGroupArray, virtualTelegramChannel)
+        : sourceGroupArray;
+    const effectiveRecursive = virtualTelegramChannel ? true : recursive;
+
     try {
         // 特殊操作：重建索引
         if (action === 'rebuild') {
@@ -122,14 +133,14 @@ export async function onRequest(context) {
         if (count === -1 && sum) {
             const result = await readIndex(context, {
                 search,
-                directory: dir,
+                directory: effectiveDir,
                 channel: channelArray,
                 listType: listTypeArray,
                 accessStatus: accessStatusArray,
                 label: labelArray,
                 fileType: fileTypeArray,
                 channelName: channelNameArray,
-                sourceGroup: sourceGroupArray,
+                sourceGroup: effectiveSourceGroupArray,
                 includeTags: includeTagsArray,
                 excludeTags: excludeTagsArray,
                 countOnly: true
@@ -146,7 +157,7 @@ export async function onRequest(context) {
         // 普通查询：返回数据
         const result = await readIndex(context, {
             search,
-            directory: dir,
+            directory: effectiveDir,
             start,
             count,
             channel: channelArray,
@@ -155,28 +166,41 @@ export async function onRequest(context) {
             label: labelArray,
             fileType: fileTypeArray,
             channelName: channelNameArray,
-            sourceGroup: sourceGroupArray,
+            sourceGroup: effectiveSourceGroupArray,
             includeTags: includeTagsArray,
             excludeTags: excludeTagsArray,
-            includeSubdirFiles: recursive,
+            includeSubdirFiles: effectiveRecursive,
         });
 
         // 索引读取失败，直接从 KV 中获取所有文件记录
         if (!result.success) {
-            const dbRecords = await getAllFileRecords(context.env, dir, {
+            const dbRecords = await getAllFileRecords(context.env, effectiveDir, {
                 listType: listTypeArray,
+                sourceGroup: effectiveSourceGroupArray,
+                includeTags: includeTagsArray,
+                excludeTags: excludeTagsArray,
+                includeSubdirFiles: effectiveRecursive,
+            });
+            const mergedRecords = await withTelegramVirtualDirectories(context, dbRecords, dir, {
+                search,
+                channel: channelArray,
+                listType: listTypeArray,
+                accessStatus: accessStatusArray,
+                label: labelArray,
+                fileType: fileTypeArray,
+                channelName: channelNameArray,
                 sourceGroup: sourceGroupArray,
                 includeTags: includeTagsArray,
                 excludeTags: excludeTagsArray,
-            });
+            }, virtualTelegramChannel);
 
             return new Response(JSON.stringify({
-                files: dbRecords.files,
-                directories: dbRecords.directories,
-                totalCount: dbRecords.totalCount,
-                directFileCount: dbRecords.directFileCount,
-                directFolderCount: dbRecords.directFolderCount,
-                returnedCount: dbRecords.returnedCount,
+                files: mergedRecords.files,
+                directories: mergedRecords.directories,
+                totalCount: mergedRecords.totalCount,
+                directFileCount: mergedRecords.directFileCount,
+                directFolderCount: mergedRecords.directFolderCount,
+                returnedCount: mergedRecords.returnedCount,
                 indexLastUpdated: Date.now(),
                 isIndexedResponse: false // 标记这是来自 KV 的响应
             }), {
@@ -191,14 +215,29 @@ export async function onRequest(context) {
         const compatibleFiles = await Promise.all(
             result.files.map(file => serializeFileRecordForManagement(db, context.env, file, metadataViewContext))
         );
+        const mergedResult = await withTelegramVirtualDirectories(context, {
+            ...result,
+            files: compatibleFiles,
+        }, dir, {
+            search,
+            channel: channelArray,
+            listType: listTypeArray,
+            accessStatus: accessStatusArray,
+            label: labelArray,
+            fileType: fileTypeArray,
+            channelName: channelNameArray,
+            sourceGroup: sourceGroupArray,
+            includeTags: includeTagsArray,
+            excludeTags: excludeTagsArray,
+        }, virtualTelegramChannel);
 
         return new Response(JSON.stringify({
-            files: compatibleFiles,
-            directories: result.directories,
-            totalCount: result.totalCount,
-            directFileCount: result.directFileCount,
-            directFolderCount: result.directFolderCount,
-            returnedCount: result.returnedCount,
+            files: mergedResult.files,
+            directories: mergedResult.directories,
+            totalCount: mergedResult.totalCount,
+            directFileCount: mergedResult.directFileCount,
+            directFolderCount: mergedResult.directFolderCount,
+            returnedCount: mergedResult.returnedCount,
             indexLastUpdated: result.indexLastUpdated,
             isIndexedResponse: true // 标记这是来自索引的响应
         }), {
@@ -215,6 +254,128 @@ export async function onRequest(context) {
             headers: { "Content-Type": "application/json", ...corsHeaders }
         });
     }
+}
+
+function getVirtualTelegramChannelName(dir) {
+    if (!dir || !dir.startsWith(TELEGRAM_VIRTUAL_ROOT) || dir === TELEGRAM_VIRTUAL_ROOT) {
+        return '';
+    }
+
+    const channelName = dir.slice(TELEGRAM_VIRTUAL_ROOT.length).replace(/\/+$/g, '');
+    if (!channelName || channelName.includes('/')) {
+        return '';
+    }
+
+    return channelName;
+}
+
+function applyVirtualTelegramSourceGroup(sourceGroupArray, channelName) {
+    const sourceGroupKey = `${TELEGRAM_SOURCE_PREFIX}${channelName}`;
+    if (sourceGroupArray.length > 0 && !sourceGroupArray.includes(sourceGroupKey)) {
+        return [NO_SOURCE_GROUP_MATCH];
+    }
+    return [sourceGroupKey];
+}
+
+async function withTelegramVirtualDirectories(context, result, dir, filters, virtualTelegramChannel) {
+    if (virtualTelegramChannel) {
+        return {
+            ...result,
+            directories: [],
+            directFileCount: result.totalCount || result.files.length,
+            directFolderCount: 0,
+        };
+    }
+
+    if (dir !== '' && dir !== TELEGRAM_VIRTUAL_ROOT) {
+        return result;
+    }
+
+    const sourceDirectories = await getTelegramSourceDirectories(context, filters);
+    if (!sourceDirectories.length) {
+        return result;
+    }
+
+    const directories = new Set(result.directories || []);
+    if (dir === '') {
+        directories.add('telegram');
+    } else {
+        sourceDirectories.forEach(directory => directories.add(directory));
+    }
+
+    const mergedDirectories = Array.from(directories).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+    return {
+        ...result,
+        directories: mergedDirectories,
+        directFolderCount: mergedDirectories.length,
+    };
+}
+
+async function getTelegramSourceDirectories(context, filters) {
+    const result = await readIndex(context, {
+        ...filters,
+        directory: '',
+        start: 0,
+        count: -1,
+        includeSubdirFiles: true,
+    });
+
+    if (result.success) {
+        return buildTelegramSourceDirectories(result.files);
+    }
+
+    return buildTelegramSourceDirectories(await getTelegramSourceRecordsFromDatabase(context.env, filters));
+}
+
+function buildTelegramSourceDirectories(files) {
+    const directories = new Map();
+    files.forEach(file => {
+        const group = getSourceGroup(file.metadata);
+        if (!group || group.type !== 'telegram' || !group.key.startsWith(TELEGRAM_SOURCE_PREFIX)) {
+            return;
+        }
+
+        const name = group.name || group.key.slice(TELEGRAM_SOURCE_PREFIX.length);
+        directories.set(group.key, `${TELEGRAM_VIRTUAL_ROOT}${name}`);
+    });
+
+    return Array.from(directories.values()).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+}
+
+async function getTelegramSourceRecordsFromDatabase(env, filters = {}) {
+    const records = [];
+    let cursor = null;
+    const db = getDatabase(env);
+
+    while (true) {
+        const response = await db.list({
+            prefix: '',
+            limit: 1000,
+            cursor,
+        });
+
+        if (!response || !response.keys || !Array.isArray(response.keys)) {
+            break;
+        }
+
+        cursor = response.cursor;
+        for (const item of response.keys) {
+            if (item.name.startsWith('manage@') || item.name.startsWith('chunk_')) {
+                continue;
+            }
+            if (!item.metadata || !item.metadata.TimeStamp) {
+                continue;
+            }
+            if (passesFallbackFilters(item.metadata, filters)) {
+                records.push(item);
+            }
+        }
+
+        if (!cursor) break;
+        await new Promise(resolve => setTimeout(resolve, 10));
+    }
+
+    return records;
 }
 
 async function getAllFileRecords(env, dir, filters = {}) {
@@ -262,6 +423,17 @@ async function getAllFileRecords(env, dir, filters = {}) {
 
             // 添加协作点
             await new Promise(resolve => setTimeout(resolve, 10));
+        }
+
+        if (filters.includeSubdirFiles) {
+            return {
+                files: allRecords,
+                directories: [],
+                totalCount: allRecords.length,
+                directFileCount: allRecords.length,
+                directFolderCount: 0,
+                returnedCount: allRecords.length
+            };
         }
 
         // 提取目录信息
