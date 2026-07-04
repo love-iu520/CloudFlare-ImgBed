@@ -31,7 +31,13 @@
       noFiles: "暂无文件",
       imported: "已导入",
       skipped: "已跳过",
-      failed: "失败"
+      failed: "失败",
+      importingTelegram: "正在导入 Telegram...",
+      importDone: "Telegram 导入完成",
+      restoreSelected: "恢复选中",
+      restoreDone: "已恢复",
+      selectFilesFirst: "请先选择文件",
+      dashboardUnavailable: "文件管理界面尚未就绪"
     },
     en: {
       dashboard: "Files",
@@ -55,7 +61,13 @@
       noFiles: "No files",
       imported: "Imported",
       skipped: "Skipped",
-      failed: "Failed"
+      failed: "Failed",
+      importingTelegram: "Importing Telegram...",
+      importDone: "Telegram import complete",
+      restoreSelected: "Restore Selected",
+      restoreDone: "Restored",
+      selectFilesFirst: "Select files first",
+      dashboardUnavailable: "File manager is not ready"
     }
   };
 
@@ -110,6 +122,8 @@
         if (normalizedPath() !== route.path) {
           window.history.pushState({}, "", route.path);
           window.dispatchEvent(new Event("popstate"));
+        } else if (route.key === "dashboard") {
+          openNormalFileView();
         }
       });
       nav.appendChild(item);
@@ -271,7 +285,7 @@
 
   function runAdminAction(action) {
     if (action === "trash") {
-      openTrashModal();
+      openTrashView();
       return;
     }
     if (action === "importTelegram") {
@@ -279,8 +293,264 @@
       return;
     }
     if (action === "sourceGroups") {
-      openSourceGroupsModal();
+      openTelegramSourceView();
     }
+  }
+
+  function makeFileModeActions() {
+    var wrap = document.createElement("div");
+    wrap.className = "cfib-file-mode-actions";
+    var actions = [
+      { key: "trash", icon: icons.trash, label: "trash" },
+      { key: "sourceGroups", icon: icons.layers, label: "sourceGroups" },
+      { key: "importTelegram", icon: icons.telegram, label: "importTelegram" },
+      { key: "restoreTrash", icon: icons.trash, label: "restoreSelected" }
+    ];
+
+    actions.forEach(function (action) {
+      var button = document.createElement("button");
+      button.className = "cfib-file-mode-btn";
+      button.type = "button";
+      button.dataset.fileModeAction = action.key;
+      button.title = text(action.label);
+      button.setAttribute("aria-label", text(action.label));
+      button.innerHTML = action.icon + '<span class="cfib-file-mode-label" data-label="' + action.label + '"></span>';
+      button.addEventListener("click", function (event) {
+        event.stopPropagation();
+        runFileModeAction(action.key);
+      });
+      wrap.appendChild(button);
+    });
+
+    return wrap;
+  }
+
+  function runFileModeAction(action) {
+    if (action === "trash") {
+      openTrashView();
+      return;
+    }
+    if (action === "sourceGroups") {
+      openTelegramSourceView();
+      return;
+    }
+    if (action === "importTelegram") {
+      importTelegramUpdates();
+      return;
+    }
+    if (action === "restoreTrash") {
+      restoreSelectedTrashFiles();
+    }
+  }
+
+  function ensureDashboardFileActions() {
+    var existing = document.querySelector(".cfib-file-mode-actions");
+    if (normalizedPath() !== "/dashboard") {
+      if (existing) existing.remove();
+      return;
+    }
+
+    var host = document.querySelector(".breadcrumb-container");
+    if (!host) return;
+
+    if (!existing || !host.contains(existing)) {
+      if (existing) existing.remove();
+      existing = makeFileModeActions();
+      var statsBadge = host.querySelector(".stats-badge");
+      if (statsBadge) {
+        host.insertBefore(existing, statsBadge);
+      } else {
+        host.appendChild(existing);
+      }
+    }
+
+    updateFileModeActions(existing);
+  }
+
+  function updateFileModeActions(wrap) {
+    var proxy = findDashboardProxy();
+    var trashMode = isTrashMode(proxy);
+    var sourceMode = Boolean(proxy && String(proxy.currentPath || "").indexOf("telegram/") === 0);
+    var selectedCount = proxy && Array.isArray(proxy.selectedFiles) ? proxy.selectedFiles.length : 0;
+
+    wrap.querySelectorAll("[data-file-mode-action]").forEach(function (button) {
+      var action = button.dataset.fileModeAction;
+      var labelKey = action === "restoreTrash" ? "restoreSelected" : action;
+      if (action === "sourceGroups") labelKey = "sourceGroups";
+      if (action === "importTelegram") labelKey = "importTelegram";
+      button.title = text(labelKey);
+      button.setAttribute("aria-label", text(labelKey));
+      button.classList.toggle("is-active", action === "trash" && trashMode || action === "sourceGroups" && sourceMode);
+      button.hidden = action === "restoreTrash" && !trashMode;
+      button.disabled = action === "restoreTrash" && selectedCount === 0;
+    });
+
+    wrap.querySelectorAll("[data-label]").forEach(function (node) {
+      node.textContent = text(node.dataset.label);
+    });
+
+    if (proxy) patchDashboardTrashDelete(proxy);
+  }
+
+  function findDashboardProxy() {
+    var nodes = document.querySelectorAll(".container, .main-container, .breadcrumb-container, #app *");
+    for (var index = 0; index < nodes.length; index += 1) {
+      var instance = nodes[index].__vueParentComponent;
+      while (instance) {
+        if (instance.proxy && typeof instance.proxy.refreshFileList === "function" && typeof instance.proxy.fetchFileList === "function") {
+          return instance.proxy;
+        }
+        instance = instance.parent;
+      }
+    }
+    return null;
+  }
+
+  function withDashboardProxy(callback) {
+    if (normalizedPath() !== "/dashboard") {
+      window.history.pushState({}, "", "/dashboard");
+      window.dispatchEvent(new Event("popstate"));
+    }
+
+    var attempts = 0;
+    function waitForDashboard() {
+      var proxy = findDashboardProxy();
+      if (proxy) {
+        patchDashboardTrashDelete(proxy);
+        callback(proxy);
+        scheduleRefresh();
+        return;
+      }
+      attempts += 1;
+      if (attempts < 80) {
+        window.setTimeout(waitForDashboard, 50);
+      } else {
+        showToast(text("dashboardUnavailable"), "error");
+      }
+    }
+    waitForDashboard();
+  }
+
+  function emptyDashboardFilters() {
+    return {
+      accessStatus: [],
+      listType: [],
+      label: [],
+      fileType: [],
+      channel: [],
+      channelName: []
+    };
+  }
+
+  function resetDashboardSearch(proxy) {
+    proxy.tempSearch = "";
+    proxy.search = "";
+    proxy.searchKeywords = "";
+    proxy.searchIncludeTags = "";
+    proxy.searchExcludeTags = "";
+    proxy.isSearchMode = false;
+    proxy.currentPage = 1;
+    if (Array.isArray(proxy.selectedFiles)) proxy.selectedFiles = [];
+  }
+
+  function openNormalFileView() {
+    withDashboardProxy(function (proxy) {
+      resetDashboardSearch(proxy);
+      proxy.filters = emptyDashboardFilters();
+      proxy.currentPath = "";
+      proxy.refreshFileList();
+    });
+  }
+
+  function openTrashView() {
+    withDashboardProxy(function (proxy) {
+      resetDashboardSearch(proxy);
+      var filters = emptyDashboardFilters();
+      filters.listType = ["Trash"];
+      proxy.filters = filters;
+      proxy.currentPath = "";
+      proxy.refreshFileList();
+    });
+  }
+
+  function openTelegramSourceView() {
+    withDashboardProxy(function (proxy) {
+      resetDashboardSearch(proxy);
+      proxy.filters = emptyDashboardFilters();
+      proxy.currentPath = "telegram/";
+      proxy.refreshFileList();
+    });
+  }
+
+  function isTrashMode(proxy) {
+    return Boolean(proxy && proxy.filters && Array.isArray(proxy.filters.listType) && proxy.filters.listType.indexOf("Trash") !== -1);
+  }
+
+  function patchDashboardTrashDelete(proxy) {
+    if (proxy.__cfibTrashDeletePatched) return;
+    proxy.__cfibTrashDeletePatched = true;
+    proxy.__cfibOriginalHandleDelete = proxy.handleDelete;
+    proxy.__cfibOriginalHandleBatchDelete = proxy.handleBatchDelete;
+
+    proxy.handleDelete = function (index, fileId) {
+      if (!isTrashMode(proxy)) {
+        return proxy.__cfibOriginalHandleDelete.apply(proxy, arguments);
+      }
+      if (!window.confirm(text("permanentDelete") + ": " + fileId)) return;
+      apiJson("/api/manage/delete/" + encodeManagePath(fileId) + "?permanent=true", { method: "DELETE" })
+        .then(function () {
+          return proxy.refreshFileList();
+        })
+        .catch(function (error) {
+          showToast(error.message || String(error), "error");
+        });
+    };
+
+    proxy.handleBatchDelete = function () {
+      if (!isTrashMode(proxy)) {
+        return proxy.__cfibOriginalHandleBatchDelete.apply(proxy, arguments);
+      }
+
+      var selected = Array.isArray(proxy.selectedFiles) ? proxy.selectedFiles.filter(function (file) {
+        return file && !file.isFolder;
+      }) : [];
+      if (!selected.length) {
+        showToast(text("selectFilesFirst"), "error");
+        return;
+      }
+      if (!window.confirm(text("permanentDelete") + ": " + selected.length)) return;
+
+      Promise.all(selected.map(function (file) {
+        return apiJson("/api/manage/delete/" + encodeManagePath(file.name) + "?permanent=true", { method: "DELETE" });
+      })).then(function () {
+        proxy.selectedFiles = [];
+        return proxy.refreshFileList();
+      }).catch(function (error) {
+        showToast(error.message || String(error), "error");
+      });
+    };
+  }
+
+  function restoreSelectedTrashFiles() {
+    withDashboardProxy(function (proxy) {
+      var selected = Array.isArray(proxy.selectedFiles) ? proxy.selectedFiles.filter(function (file) {
+        return file && !file.isFolder;
+      }) : [];
+      if (!selected.length) {
+        showToast(text("selectFilesFirst"), "error");
+        return;
+      }
+
+      Promise.all(selected.map(function (file) {
+        return apiJson("/api/manage/trash/restore/" + encodeManagePath(file.name), { method: "POST" });
+      })).then(function () {
+        showToast(text("restoreDone") + ": " + selected.length, "success");
+        proxy.selectedFiles = [];
+        return proxy.refreshFileList();
+      }).catch(function (error) {
+        showToast(error.message || String(error), "error");
+      });
+    });
   }
 
   function ensureModal() {
@@ -402,26 +672,47 @@
   }
 
   function importTelegramUpdates() {
-    showLoading(text("importTelegram"));
-    apiJson("/api/manage/telegram/import", { method: "POST", body: JSON.stringify({}) })
-      .then(function (data) {
-        var html = '<div class="cfib-import-summary">' +
-          summaryPill(text("imported"), data.imported ? data.imported.length : 0) +
-          summaryPill(text("skipped"), data.skipped ? data.skipped.length : 0) +
-          summaryPill(text("failed"), data.failed ? data.failed.length : 0) +
-          '</div>';
-        html += '<div class="cfib-modal-note">' + escapeHtml(data.note || '') + '</div>';
-        html += renderResultList(data.imported || [], "fileId");
-        if (data.failed && data.failed.length) {
-          html += renderResultList(data.failed, "error");
-        }
-        showModal(text("importTelegram"), html);
-      })
-      .catch(function (error) {
-        renderError(text("importTelegram"), error);
-      });
+    withDashboardProxy(function (proxy) {
+      showToast(text("importingTelegram"), "loading");
+      apiJson("/api/manage/telegram/import", { method: "POST", body: JSON.stringify({}) })
+        .then(function (data) {
+          var imported = data.imported ? data.imported.length : 0;
+          var skipped = data.skipped ? data.skipped.length : 0;
+          var failed = data.failed ? data.failed.length : 0;
+          showToast(
+            text("importDone") + " - " + text("imported") + ": " + imported + ", " + text("skipped") + ": " + skipped + ", " + text("failed") + ": " + failed,
+            failed > 0 ? "error" : "success"
+          );
+          return proxy.refreshFileList();
+        })
+        .catch(function (error) {
+          showToast(error.message || String(error), "error");
+        });
+    });
   }
 
+  function ensureToastContainer() {
+    var container = document.querySelector(".cfib-toast-container");
+    if (container) return container;
+    container = document.createElement("div");
+    container.className = "cfib-toast-container";
+    document.body.appendChild(container);
+    return container;
+  }
+
+  function showToast(message, type) {
+    var container = ensureToastContainer();
+    var toast = document.createElement("div");
+    toast.className = "cfib-toast " + (type || "info");
+    toast.textContent = message;
+    container.appendChild(toast);
+    window.setTimeout(function () {
+      toast.classList.add("is-leaving");
+      window.setTimeout(function () {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+      }, 220);
+    }, type === "loading" ? 1800 : 3600);
+  }
   function openSourceGroupsModal() {
     showLoading(text("sourceGroups"));
     apiJson("/api/manage/source-groups")
@@ -554,15 +845,18 @@
     var nav = tabs.querySelector(".cfib-admin-nav");
     if (!nav) {
       nav = makeNav("cfib-admin-nav", false);
-      nav.appendChild(makeAdminActions());
       tabs.insertBefore(nav, pageSwitcher);
     }
+    nav.querySelectorAll(".cfib-admin-actions").forEach(function (node) {
+      node.remove();
+    });
     updateNav(nav);
   }
 
   function refresh() {
     ensureUploadNav();
     ensureAdminNav();
+    ensureDashboardFileActions();
     document.querySelectorAll(".cfib-main-nav").forEach(updateNav);
   }
 

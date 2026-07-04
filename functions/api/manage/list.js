@@ -8,6 +8,7 @@ import { getSourceGroup, getSourceGroupKey } from '../../utils/sourceGroup.js';
 
 const TELEGRAM_VIRTUAL_ROOT = 'telegram/';
 const TELEGRAM_SOURCE_PREFIX = 'telegram:';
+const LEGACY_TELEGRAM_IMPORT_ROOT = 'telegram-import';
 const NO_SOURCE_GROUP_MATCH = '__cfib_no_source_group_match__';
 
 // CORS 跨域响应头
@@ -298,6 +299,7 @@ async function withTelegramVirtualDirectories(context, result, dir, filters, vir
 
     const directories = new Set(result.directories || []);
     if (dir === '') {
+        directories.delete(LEGACY_TELEGRAM_IMPORT_ROOT);
         directories.add('telegram');
     } else {
         sourceDirectories.forEach(directory => directories.add(directory));

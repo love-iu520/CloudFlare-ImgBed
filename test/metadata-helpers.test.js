@@ -11,6 +11,9 @@ import {
   markMetadataTrashed,
   restoreMetadataFromTrash,
 } from '../functions/utils/trash.js';
+import {
+  buildImportedFileRecord,
+} from '../functions/api/manage/telegram/importRecord.js';
 
 describe('metadata helpers', () => {
   it('builds stable Telegram source group metadata', () => {
@@ -75,5 +78,35 @@ describe('metadata helpers', () => {
 
     assert.equal(restored.ListType, 'Block');
     assert.equal(restored.Trash, undefined);
+  });
+
+  it('keeps imported Telegram records in the normal file view while preserving source group metadata', async () => {
+    const db = {
+      async get() {
+        return null;
+      },
+    };
+
+    const record = await buildImportedFileRecord(
+      db,
+      { name: '电报机器人' },
+      { message_id: 58, date: 1710000000 },
+      {
+        field: 'photo',
+        fileId: 'telegram-file-id',
+        fileUniqueId: 'telegram-file-unique-id',
+        fileName: 'telegram-58.jpg',
+        fileSizeBytes: 1024,
+        fileType: 'image/jpeg',
+      }
+    );
+
+    assert.equal(record.fileId, '58_telegram-58.jpg');
+    assert.equal(record.metadata.Directory, '');
+    assert.deepEqual(record.metadata.SourceGroup, {
+      type: 'telegram',
+      key: 'telegram:电报机器人',
+      name: '电报机器人',
+    });
   });
 });

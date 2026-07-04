@@ -1,9 +1,8 @@
 import { getDatabase } from '../../../utils/databaseAdapter.js';
 import { batchAddFilesToIndex } from '../../../utils/indexManager.js';
 import { TelegramAPI } from '../../../utils/storage/telegramAPI.js';
-import { buildTelegramSourceGroup } from '../../../utils/sourceGroup.js';
 import { getUploadConfig } from '../sysConfig/upload.js';
-import { resolveFileExt, sanitizeFileName, sanitizeUploadFolder } from '../../../upload/uploadTools.js';
+import { buildImportedFileRecord, resolveTelegramFileExt } from './importRecord.js';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -279,7 +278,7 @@ function extractTelegramMedia(message) {
     for (const [field, value, fallbackType] of candidates) {
         if (!value?.file_id) continue;
         const fileType = value.mime_type || fallbackType;
-        const fileName = value.file_name || `telegram-${message.message_id}.${resolveFileExt('', fileType)}`;
+        const fileName = value.file_name || `telegram-${message.message_id}.${resolveTelegramFileExt('', fileType)}`;
 
         return {
             field,
@@ -295,82 +294,6 @@ function extractTelegramMedia(message) {
     }
 
     return null;
-}
-
-async function buildImportedFileRecord(db, channel, message, media) {
-    const channelName = channel.name || 'Telegram';
-    const folder = `telegram-import/${sanitizeUploadFolder(channelName || 'Telegram')}`;
-    const fileName = ensureFileExtension(media.fileName, media.fileType);
-    const safeFileName = safeSanitizeFileName(fileName);
-    const fileId = await buildUniqueImportFileId(db, folder, message.message_id, safeFileName);
-    const metadata = {
-        FileName: fileName,
-        FileType: media.fileType || 'application/octet-stream',
-        FileSize: ((media.fileSizeBytes || 0) / 1024 / 1024).toFixed(2),
-        FileSizeBytes: media.fileSizeBytes || 0,
-        UploadIP: 'TelegramImport',
-        UploadAddress: 'Telegram Channel',
-        ListType: 'None',
-        TimeStamp: message.date ? message.date * 1000 : Date.now(),
-        Label: 'None',
-        Directory: folder ? `${folder}/` : '',
-        Tags: [],
-        Channel: 'TelegramNew',
-        ChannelName: channelName,
-        TgFileId: media.fileId,
-        TgFileUniqueId: media.fileUniqueId,
-        TgMessageId: message.message_id,
-        TgImported: true,
-        TgImportedAt: Date.now(),
-        TgMediaType: media.field,
-        SourceGroup: buildTelegramSourceGroup(channelName),
-    };
-
-    if (media.width) metadata.Width = media.width;
-    if (media.height) metadata.Height = media.height;
-    if (media.duration) metadata.Duration = media.duration;
-
-    return { fileId, metadata };
-}
-
-async function buildUniqueImportFileId(db, folder, messageId, fileName) {
-    const baseId = folder ? `${folder}/${messageId}_${fileName}` : `${messageId}_${fileName}`;
-    if (await db.get(baseId) === null) {
-        return baseId;
-    }
-
-    const dotIndex = fileName.lastIndexOf('.');
-    const stem = dotIndex > 0 ? fileName.slice(0, dotIndex) : fileName;
-    const ext = dotIndex > 0 ? fileName.slice(dotIndex) : '';
-    let counter = 1;
-
-    while (counter <= 1000) {
-        const candidateName = `${messageId}_${stem}(${counter})${ext}`;
-        const candidateId = folder ? `${folder}/${candidateName}` : candidateName;
-        if (await db.get(candidateId) === null) {
-            return candidateId;
-        }
-        counter += 1;
-    }
-
-    throw new Error('Failed to generate unique Telegram import file ID');
-}
-
-function ensureFileExtension(fileName, fileType) {
-    const ext = resolveFileExt(fileName, fileType);
-    const normalized = String(fileName || '').trim() || `telegram-file.${ext}`;
-    return normalized.includes('.') ? normalized : `${normalized}.${ext}`;
-}
-
-function safeSanitizeFileName(fileName) {
-    try {
-        return sanitizeFileName(fileName);
-    } catch {
-        return String(fileName || 'telegram-file')
-            .split('/')
-            .pop()
-            .replace(/[\\\/:\*\?"'<>\| \(\)\[\]\{\}#%\^`~;@&=\+\$,]/g, '_');
-    }
 }
 
 async function hashSensitiveValue(value) {
