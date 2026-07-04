@@ -38,12 +38,24 @@ assert.doesNotMatch(fileModeActions, /sourceGroups/, 'dashboard tool actions sho
 
 const ensureAdminNav = extractFunctionBody(navHotfix, 'ensureAdminNav');
 assert.match(ensureAdminNav, /makeAdminActions\(\)/, 'admin nav should mount file management actions in the top bar');
+assert.match(ensureAdminNav, /cfib-tabs-hotfix/, 'admin nav should still use the DashboardTabs host');
+assert.match(ensureAdminNav, /cfib-tabs-unified/, 'DashboardTabs should expose a unified top navigation layout');
 
 const refresh = extractFunctionBody(navHotfix, 'refresh');
 assert.match(refresh, /ensureDashboardFileActions\(\)/, 'dashboard-local file action toolbar should be injected');
+assert.match(refresh, /enforceDashboardModeRefresh\(\)/, 'dashboard mode should be enforced after refresh races settle');
 
 const applyDashboardMode = extractFunctionBody(navHotfix, 'applyDashboardMode');
-assert.match(applyDashboardMode, /filters\.listType = \["Trash"\]/, 'trash mode should filter the dashboard to deleted files only');
+assert.match(applyDashboardMode, /trashDashboardFilters\(\)/, 'trash mode should use the trash-only dashboard filters');
+assert.match(applyDashboardMode, /currentDashboardMode = mode/, 'dashboard mode should persist beyond the initial navigation request');
+
+const trashDashboardFilters = extractFunctionBody(navHotfix, 'trashDashboardFilters');
+assert.match(trashDashboardFilters, /filters\.listType = \["Trash"\]/, 'trash dashboard filters should include deleted files only');
+
+const patchDashboardModeRefresh = extractFunctionBody(navHotfix, 'patchDashboardModeRefresh');
+assert.match(patchDashboardModeRefresh, /__cfibModeRefreshPatched/, 'dashboard refresh should only be wrapped once');
+assert.match(patchDashboardModeRefresh, /forceDashboardModeFilters/, 'wrapped refresh should force the active dashboard mode filters');
+assert.match(patchDashboardModeRefresh, /currentDashboardMode === "trash"/, 'wrapped refresh should protect trash mode from normal refresh races');
 
 const importTelegramUpdates = extractFunctionBody(navHotfix, 'importTelegramUpdates');
 assert.doesNotMatch(importTelegramUpdates, /withDashboardProxy/, 'Telegram import should not wait for the dashboard proxy');
@@ -53,3 +65,9 @@ const css = readFileSync(new URL('../frontend-dist/css/nav-hotfix.css', import.m
 const adminNavRuleMatch = css.match(/\.cfib-tabs-hotfix \.cfib-admin-nav\s*\{[^}]*\}/);
 assert.ok(adminNavRuleMatch, 'admin nav CSS rule should exist');
 assert.doesNotMatch(adminNavRuleMatch[0], /position:\s*fixed/, 'admin nav should be embedded in the top bar instead of fixed');
+const unifiedTabsRuleMatch = css.match(/\.cfib-tabs-hotfix\.cfib-tabs-unified\s*\{[^}]*\}/);
+assert.ok(unifiedTabsRuleMatch, 'DashboardTabs should have a unified layout rule');
+assert.match(unifiedTabsRuleMatch[0], /grid-template-columns:\s*auto\s+1fr\s+auto/, 'theme and language controls should sit on the left while nav stays centered');
+const unifiedNavRuleMatch = css.match(/\.cfib-tabs-hotfix\.cfib-tabs-unified \.cfib-admin-nav\s*\{[^}]*\}/);
+assert.ok(unifiedNavRuleMatch, 'unified DashboardTabs should center the admin nav');
+assert.match(unifiedNavRuleMatch[0], /grid-column:\s*2/, 'admin nav should occupy the center grid column');

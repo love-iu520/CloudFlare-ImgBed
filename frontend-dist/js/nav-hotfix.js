@@ -85,6 +85,8 @@
   var dashboardModeStorageKey = "cfib-dashboard-mode";
   var dashboardRefreshStorageKey = "cfib-dashboard-refresh-pending";
   var pendingDashboardMode = "";
+  var currentDashboardMode = "";
+  var dashboardModeEnforcePending = false;
 
   function locale() {
     return localStorage.getItem("app-locale") === "en" ? "en" : "zh-CN";
@@ -425,6 +427,7 @@
 
   function requestDashboardMode(mode) {
     pendingDashboardMode = mode;
+    currentDashboardMode = mode;
     setSessionValue(dashboardModeStorageKey, mode);
     navigateToDashboard();
     applyPendingDashboardMode();
@@ -432,19 +435,14 @@
   }
 
   function applyDashboardMode(proxy, mode) {
+    currentDashboardMode = mode;
     patchDashboardTrashDelete(proxy);
+    patchDashboardModeRefresh(proxy);
     resetDashboardSearch(proxy);
 
-    if (mode === "trash") {
-      var filters = emptyDashboardFilters();
-      filters.listType = ["Trash"];
-      proxy.filters = filters;
-    } else {
-      proxy.filters = emptyDashboardFilters();
-    }
-
+    proxy.filters = mode === "trash" ? trashDashboardFilters() : emptyDashboardFilters();
     proxy.currentPath = "";
-    proxy.refreshFileList();
+    return proxy.refreshFileList();
   }
 
   function applyPendingDashboardMode() {
@@ -454,6 +452,7 @@
     if (!proxy) return;
 
     patchDashboardTrashDelete(proxy);
+    patchDashboardModeRefresh(proxy);
     var mode = pendingDashboardMode || getSessionValue(dashboardModeStorageKey);
     if (!mode) return;
 
@@ -469,6 +468,8 @@
     if (!proxy) return false;
 
     patchDashboardTrashDelete(proxy);
+    patchDashboardModeRefresh(proxy);
+    forceDashboardModeFilters(proxy);
     proxy.refreshFileList();
     return true;
   }
@@ -497,6 +498,68 @@
     };
   }
 
+  function trashDashboardFilters(baseFilters) {
+    var filters = Object.assign(emptyDashboardFilters(), baseFilters || {});
+    filters.listType = ["Trash"];
+    return filters;
+  }
+
+  function forceDashboardModeFilters(proxy) {
+    if (!proxy || currentDashboardMode !== "trash") return;
+    proxy.filters = trashDashboardFilters(proxy.filters);
+    proxy.currentPath = "";
+  }
+
+  function hasNonTrashRows(proxy) {
+    var rows = proxy && Array.isArray(proxy.tableData) ? proxy.tableData : [];
+    return rows.some(function (file) {
+      return file && !file.isFolder && file.metadata && file.metadata.ListType !== "Trash";
+    });
+  }
+
+  function patchDashboardModeRefresh(proxy) {
+    if (!proxy) return;
+    if (proxy.__cfibModeRefreshPatched) {
+      forceDashboardModeFilters(proxy);
+      return;
+    }
+
+    proxy.__cfibModeRefreshPatched = true;
+    proxy.__cfibOriginalRefreshFileList = proxy.refreshFileList;
+    proxy.refreshFileList = function () {
+      if (currentDashboardMode === "trash") forceDashboardModeFilters(proxy);
+      var result = proxy.__cfibOriginalRefreshFileList.apply(proxy, arguments);
+      if (result && typeof result.then === "function") {
+        return result.then(function (value) {
+          if (currentDashboardMode === "trash") forceDashboardModeFilters(proxy);
+          return value;
+        });
+      }
+      if (currentDashboardMode === "trash") forceDashboardModeFilters(proxy);
+      return result;
+    };
+
+    forceDashboardModeFilters(proxy);
+  }
+
+  function enforceDashboardModeRefresh() {
+    if (normalizedPath() !== "/dashboard" || currentDashboardMode !== "trash") return;
+
+    var proxy = findDashboardProxy();
+    if (!proxy) return;
+
+    patchDashboardTrashDelete(proxy);
+    patchDashboardModeRefresh(proxy);
+    forceDashboardModeFilters(proxy);
+
+    if (dashboardModeEnforcePending || !hasNonTrashRows(proxy)) return;
+
+    dashboardModeEnforcePending = true;
+    Promise.resolve(proxy.refreshFileList()).finally(function () {
+      dashboardModeEnforcePending = false;
+    });
+  }
+
   function resetDashboardSearch(proxy) {
     proxy.tempSearch = "";
     proxy.search = "";
@@ -521,7 +584,7 @@
   }
 
   function isTrashViewActive() {
-    return pendingDashboardMode === "trash" || getSessionValue(dashboardModeStorageKey) === "trash" || isTrashMode(findDashboardProxy());
+    return currentDashboardMode === "trash" || pendingDashboardMode === "trash" || getSessionValue(dashboardModeStorageKey) === "trash" || isTrashMode(findDashboardProxy());
   }
 
   function patchDashboardTrashDelete(proxy) {
@@ -804,9 +867,12 @@
 
   function updateAdminActions(nav) {
     var proxy = findDashboardProxy();
-    var trashMode = isTrashMode(proxy) || pendingDashboardMode === "trash" || getSessionValue(dashboardModeStorageKey) === "trash";
+    var trashMode = normalizedPath() === "/dashboard" && (currentDashboardMode === "trash" || isTrashMode(proxy) || pendingDashboardMode === "trash" || getSessionValue(dashboardModeStorageKey) === "trash");
 
-    if (proxy) patchDashboardTrashDelete(proxy);
+    if (proxy) {
+      patchDashboardTrashDelete(proxy);
+      patchDashboardModeRefresh(proxy);
+    }
 
     nav.querySelectorAll("[data-admin-action]").forEach(function (button) {
       var action = button.dataset.adminAction;
@@ -842,17 +908,41 @@
     updateNav(existing);
   }
 
+  function ensureTabsUnifiedLayout(tabs, nav) {
+    tabs.classList.add("cfib-tabs-hotfix", "cfib-tabs-unified");
+
+    var tools = tabs.querySelector(".cfib-tabs-tools");
+    if (!tools) {
+      tools = document.createElement("div");
+      tools.className = "cfib-tabs-tools";
+      tabs.insertBefore(tools, tabs.firstChild);
+    }
+
+    var themeToggle = tabs.querySelector("#themeToggle");
+    var languageSwitcher = tabs.querySelector(".tabs-language-switcher");
+    [themeToggle, languageSwitcher].forEach(function (node) {
+      if (node && node.parentNode !== tools) {
+        tools.appendChild(node);
+      }
+    });
+
+    if (nav && nav.parentNode !== tabs) {
+      tabs.appendChild(nav);
+    }
+  }
+
   function ensureAdminNav() {
     var tabs = document.querySelector(".tabs");
     var pageSwitcher = tabs && tabs.querySelector(".page-switcher");
     if (!tabs || !pageSwitcher) return;
 
-    tabs.classList.add("cfib-tabs-hotfix");
+    tabs.classList.add("cfib-tabs-hotfix", "cfib-tabs-unified");
     var nav = tabs.querySelector(".cfib-admin-nav");
     if (!nav) {
       nav = makeNav("cfib-admin-nav", false);
       tabs.insertBefore(nav, pageSwitcher);
     }
+    ensureTabsUnifiedLayout(tabs, nav);
     if (!nav.querySelector(".cfib-admin-actions")) {
       nav.appendChild(makeAdminActions());
     }
@@ -864,6 +954,7 @@
     ensureUploadNav();
     applyPendingDashboardMode();
     flushPendingDashboardRefresh();
+    enforceDashboardModeRefresh();
     ensureDashboardFileActions();
     ensureAdminNav();
     document.querySelectorAll(".cfib-main-nav").forEach(updateNav);

@@ -87,10 +87,32 @@
   z-index: 2200;
 }
 
+.cfib-tabs-hotfix.cfib-tabs-unified {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  column-gap: 12px;
+  width: min(760px, 48vw);
+  min-width: 0;
+}
+
+.cfib-tabs-hotfix.cfib-tabs-unified .cfib-tabs-tools {
+  grid-column: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 8px;
+}
+
 .cfib-tabs-hotfix .cfib-admin-nav {
   max-width: calc(100vw - 28px);
   position: static;
   transform: none;
+}
+
+.cfib-tabs-hotfix.cfib-tabs-unified .cfib-admin-nav {
+  grid-column: 2;
+  justify-self: center;
 }
 
 .cfib-tabs-hotfix .page-switcher {
@@ -529,8 +551,16 @@ html.dark .cfib-file-row {
     transform: none;
   }
 
+  .cfib-tabs-hotfix.cfib-tabs-unified {
+    width: min(100%, 620px);
+  }
+
   .cfib-main-nav {
     justify-content: flex-start;
+  }
+
+  .cfib-tabs-hotfix.cfib-tabs-unified .cfib-admin-nav {
+    justify-content: center;
   }
 }
 
@@ -549,6 +579,15 @@ html.dark .cfib-file-row {
     gap: 2px;
     padding: 3px;
     border-radius: 12px;
+  }
+
+  .cfib-tabs-hotfix.cfib-tabs-unified {
+    width: 100%;
+    column-gap: 6px;
+  }
+
+  .cfib-tabs-hotfix.cfib-tabs-unified .cfib-tabs-tools {
+    gap: 4px;
   }
 
   .cfib-nav-item,
