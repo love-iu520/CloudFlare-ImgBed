@@ -16,9 +16,14 @@
       upload: "文件上传",
       more: "更多",
       uploadSettings: "上传设置",
+      uploadMethod: "切换上传方式",
       linkFormat: "链接格式",
       manage: "系统管理",
       logout: "退出登录",
+      uploadHistory: "上传记录",
+      announcement: "查看公告",
+      language: "语言",
+      docs: "查看文档",
       trash: "回收站",
       importTelegram: "导入 Telegram",
       close: "关闭",
@@ -45,9 +50,14 @@
       upload: "Upload",
       more: "More",
       uploadSettings: "Upload Settings",
+      uploadMethod: "Switch Upload Method",
       linkFormat: "Link Format",
       manage: "Manage",
       logout: "Logout",
+      uploadHistory: "Upload History",
+      announcement: "Announcements",
+      language: "Language",
+      docs: "Docs",
       trash: "Trash",
       importTelegram: "Import Telegram",
       close: "Close",
@@ -79,7 +89,11 @@
     logout: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16 17l5-5-5-5M21 12H9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     trash: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M7 6l1 15h8l1-15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     telegram: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 4 3.7 10.8c-1 .4-.9 1.9.2 2.1l4.5.9 1.7 5.1c.3.9 1.5 1.1 2.1.3l2.5-3.2 4.2 3.1c.8.6 2 .1 2.2-.9L23 5.5c.2-1-.9-1.8-2-1.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="m8.5 13.8 7.1-5.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
-    restore: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7v6h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.3 13A7 7 0 1 0 7 5.8L4 8.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    restore: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7v6h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.3 13A7 7 0 1 0 7 5.8L4 8.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    history: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 4v4h4M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    announcement: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11v3a2 2 0 0 0 2 2h2l4 3v-3h2l6 3V5l-6 3H6a2 2 0 0 0-2 2v1Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M14 8v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    globe: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    docs: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H20v17H7.5A2.5 2.5 0 0 0 5 21.5v-17Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 6h8M8 10h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
   };
 
   var dashboardModeStorageKey = "cfib-dashboard-mode";
@@ -150,9 +164,14 @@
       icons.more + '<span class="cfib-nav-label" data-label="more"></span></button>' +
       '<div class="cfib-upload-actions-panel" role="menu">' +
       '<button class="cfib-action-item" type="button" data-action="settings" role="menuitem">' + icons.upload + '<span data-label="uploadSettings"></span></button>' +
+      '<button class="cfib-action-item" type="button" data-action="uploadMethod" role="menuitem">' + icons.upload + '<span data-label="uploadMethod"></span></button>' +
       '<button class="cfib-action-item" type="button" data-action="link" role="menuitem">' + icons.link + '<span data-label="linkFormat"></span></button>' +
       '<button class="cfib-action-item" type="button" data-action="manage" role="menuitem">' + icons.cogs + '<span data-label="manage"></span></button>' +
       '<button class="cfib-action-item" type="button" data-action="logout" role="menuitem">' + icons.logout + '<span data-label="logout"></span></button>' +
+      '<button class="cfib-action-item" type="button" data-action="history" role="menuitem">' + icons.history + '<span data-label="uploadHistory"></span></button>' +
+      '<button class="cfib-action-item" type="button" data-action="announcement" role="menuitem">' + icons.announcement + '<span data-label="announcement"></span></button>' +
+      '<button class="cfib-action-item" type="button" data-action="language" role="menuitem">' + icons.globe + '<span data-label="language"></span></button>' +
+      '<button class="cfib-action-item" type="button" data-action="docs" role="menuitem">' + icons.docs + '<span data-label="docs"></span></button>' +
       '</div>';
 
     var trigger = wrap.querySelector(".cfib-actions-trigger");
@@ -264,13 +283,61 @@
     return true;
   }
 
+  function findUploadProxy() {
+    var nodes = document.querySelectorAll(".upload-home, .container, #app *");
+    for (var index = 0; index < nodes.length; index += 1) {
+      var instance = nodes[index].__vueParentComponent;
+      while (instance) {
+        if (instance.proxy && (typeof instance.proxy.handleDesktopMenuCommand === "function" || typeof instance.proxy.handleQuickToolbarCommand === "function")) {
+          return instance.proxy;
+        }
+        instance = instance.parent;
+      }
+    }
+    return null;
+  }
+
+  function runUploadProxyCommand(command) {
+    var proxy = findUploadProxy();
+    if (!proxy) return false;
+
+    if ((command === "linkFormat" || command === "manage" || command === "logout") && typeof proxy.handleQuickToolbarCommand === "function") {
+      proxy.handleQuickToolbarCommand(command);
+      return true;
+    }
+
+    if (command === "toggleUploadMethod" && typeof proxy.handleChangeUploadMethod === "function") {
+      proxy.handleChangeUploadMethod();
+      return true;
+    }
+
+    if ((command === "showHistory" || command === "showAnnouncement" || command === "toggleLanguage" || command === "viewDocs") && typeof proxy.handleDesktopMenuCommand === "function") {
+      proxy.handleDesktopMenuCommand(command);
+      return true;
+    }
+
+    if ((command === "showHistory" || command === "showAnnouncement" || command === "toggleLanguage" || command === "viewDocs") && typeof proxy.handleMobileMenuCommand === "function") {
+      proxy.handleMobileMenuCommand(command);
+      return true;
+    }
+
+    return false;
+  }
+
   function runUploadAction(action) {
     if (action === "settings") {
       clickQuickToolbarButton(3);
       return;
     }
+    if (action === "uploadMethod") {
+      if (!runUploadProxyCommand("toggleUploadMethod")) {
+        var button = document.querySelector(".upload-method-button");
+        if (button) button.click();
+      }
+      return;
+    }
     if (action === "link") {
-      clickQuickToolbarButton(2);
+      if (!runUploadProxyCommand("linkFormat")) clickQuickToolbarButton(2);
       return;
     }
     if (action === "manage") {
@@ -278,7 +345,25 @@
       window.dispatchEvent(new Event("popstate"));
       return;
     }
+    if (action === "history") {
+      if (!runUploadProxyCommand("showHistory")) clickQuickToolbarButton(0);
+      return;
+    }
+    if (action === "announcement") {
+      if (!runUploadProxyCommand("showAnnouncement")) clickQuickToolbarButton(1);
+      return;
+    }
+    if (action === "language") {
+      runUploadProxyCommand("toggleLanguage");
+      return;
+    }
+    if (action === "docs") {
+      if (!runUploadProxyCommand("viewDocs")) window.open("https://cfbed.sanyue.de/qa/", "_blank");
+      return;
+    }
     if (action === "logout") {
+      if (runUploadProxyCommand("logout")) return;
+
       fetch("/api/auth/logout", {
         method: "POST",
         credentials: "include",
@@ -892,14 +977,19 @@
   }
 
   function ensureUploadNav() {
+    var host = document.querySelector(".upload-home");
     var existing = document.querySelector(".cfib-upload-nav");
     if (normalizedPath() !== "/") {
       if (existing) existing.remove();
+      resetUploadTools(host);
+      if (host) host.classList.remove("cfib-upload-home-hotfix");
       return;
     }
 
-    var host = document.querySelector(".upload-home");
     if (!host) return;
+
+    host.classList.add("cfib-upload-home-hotfix");
+    ensureUploadTools(host);
 
     if (!existing) {
       existing = makeNav("cfib-upload-nav", true);
@@ -908,8 +998,60 @@
     updateNav(existing);
   }
 
+  function makeUploadLanguageButton() {
+    var button = document.createElement("button");
+    button.className = "cfib-upload-tool-btn";
+    button.type = "button";
+    button.dataset.uploadTool = "language";
+    button.innerHTML = icons.globe + '<span class="cfib-upload-tool-label" data-label="language"></span>';
+    button.addEventListener("click", function (event) {
+      event.stopPropagation();
+      runUploadAction("language");
+    });
+    return button;
+  }
+
+  function ensureUploadTools(host) {
+    var tools = host.querySelector(".cfib-upload-tools");
+    if (!tools) {
+      tools = document.createElement("div");
+      tools.className = "cfib-upload-tools";
+      host.insertBefore(tools, host.firstChild);
+    }
+
+    var themeToggle = host.querySelector(".toggle-dark-button.desktop-only, #themeToggle");
+    if (themeToggle && themeToggle.parentNode !== tools) {
+      tools.appendChild(themeToggle);
+    }
+
+    var languageButton = tools.querySelector('[data-upload-tool="language"]');
+    if (!languageButton) {
+      languageButton = makeUploadLanguageButton();
+      tools.appendChild(languageButton);
+    }
+
+    languageButton.title = text("language");
+    languageButton.setAttribute("aria-label", text("language"));
+    tools.querySelectorAll("[data-label]").forEach(function (node) {
+      node.textContent = text(node.dataset.label);
+    });
+  }
+
+  function resetUploadTools(host) {
+    var tools = document.querySelector(".cfib-upload-tools");
+    if (!tools) return;
+
+    var themeToggle = tools.querySelector(".toggle-dark-button.desktop-only, #themeToggle");
+    if (themeToggle && host) {
+      host.insertBefore(themeToggle, host.firstChild);
+    }
+    tools.remove();
+  }
+
   function ensureTabsUnifiedLayout(tabs, nav) {
     tabs.classList.add("cfib-tabs-hotfix", "cfib-tabs-unified");
+    var header = tabs.closest(".header-content");
+    if (header) header.classList.add("cfib-header-hotfix");
 
     var tools = tabs.querySelector(".cfib-tabs-tools");
     if (!tools) {
@@ -950,8 +1092,17 @@
     updateAdminActions(nav);
   }
 
+  function normalizeLegacyUploadMenu() {
+    if (normalizedPath() !== "/") return;
+
+    document.querySelectorAll(".more-dropdown.desktop-only, .mobile-more-dropdown.mobile-only").forEach(function (node) {
+      node.setAttribute("aria-hidden", "true");
+    });
+  }
+
   function refresh() {
     ensureUploadNav();
+    normalizeLegacyUploadMenu();
     applyPendingDashboardMode();
     flushPendingDashboardRefresh();
     enforceDashboardModeRefresh();
