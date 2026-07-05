@@ -378,7 +378,7 @@
 
   function runAdminAction(action) {
     if (action === "trash") {
-      openTrashView();
+      openTrashModal();
     }
   }
 

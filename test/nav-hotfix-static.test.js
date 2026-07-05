@@ -41,9 +41,17 @@ assert.match(ensureAdminNav, /makeAdminActions\(\)/, 'admin nav should mount fil
 assert.match(ensureAdminNav, /cfib-tabs-hotfix/, 'admin nav should still use the DashboardTabs host');
 assert.match(ensureAdminNav, /cfib-tabs-unified/, 'DashboardTabs should expose a unified top navigation layout');
 
+const runAdminAction = extractFunctionBody(navHotfix, 'runAdminAction');
+assert.match(runAdminAction, /openTrashModal\(\)/, 'trash nav action should open the dedicated trash modal');
+assert.doesNotMatch(runAdminAction, /openTrashView\(\)/, 'trash nav action should not reuse dashboard filter mode');
+
 const refresh = extractFunctionBody(navHotfix, 'refresh');
 assert.match(refresh, /ensureDashboardFileActions\(\)/, 'dashboard-local file action toolbar should be injected');
 assert.match(refresh, /enforceDashboardModeRefresh\(\)/, 'dashboard mode should be enforced after refresh races settle');
+
+const loadTrashFiles = extractFunctionBody(navHotfix, 'loadTrashFiles');
+assert.match(loadTrashFiles, /listType=Trash/, 'trash modal should request only trashed files');
+assert.match(loadTrashFiles, /recursive=true/, 'trash modal should list deleted files across folders');
 
 const applyDashboardMode = extractFunctionBody(navHotfix, 'applyDashboardMode');
 assert.match(applyDashboardMode, /trashDashboardFilters\(\)/, 'trash mode should use the trash-only dashboard filters');
