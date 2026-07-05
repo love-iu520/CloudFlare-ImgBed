@@ -14,6 +14,10 @@ import {
 import {
   buildImportedFileRecord,
 } from '../functions/api/manage/telegram/importRecord.js';
+import {
+  FOLDER_PLACEHOLDER_FILE,
+  isFolderPlaceholder,
+} from '../functions/utils/indexManager.js';
 
 describe('metadata helpers', () => {
   it('builds stable Telegram source group metadata', () => {
@@ -108,5 +112,11 @@ describe('metadata helpers', () => {
       key: 'telegram:电报机器人',
       name: '电报机器人',
     });
+  });
+
+  it('recognizes folder placeholder records', () => {
+    assert.equal(isFolderPlaceholder(`photos/${FOLDER_PLACEHOLDER_FILE}`, {}), true);
+    assert.equal(isFolderPlaceholder('photos/real.jpg', { FolderPlaceholder: true }), true);
+    assert.equal(isFolderPlaceholder('photos/real.jpg', {}), false);
   });
 });

@@ -32,6 +32,7 @@ assert.doesNotMatch(adminActions, /sourceGroups/, 'top nav should not include Te
 
 const fileModeActions = extractFunctionBody(navHotfix, 'makeFileModeActions');
 assert.match(fileModeActions, /cfib-file-mode-actions/, 'file management tool actions should be rendered in the dashboard area');
+assert.match(fileModeActions, /key: "newFolder"/, 'dashboard tool actions should include new folder');
 assert.match(fileModeActions, /key: "importTelegram"/, 'dashboard tool actions should include Telegram import');
 assert.doesNotMatch(fileModeActions, /key: "restoreTrash"/, 'dashboard tool actions should not include the unused trash restore shortcut');
 assert.doesNotMatch(fileModeActions, /sourceGroups/, 'dashboard tool actions should not include Telegram source groups');
@@ -85,6 +86,9 @@ assert.match(patchDashboardModeRefresh, /currentDashboardMode === "trash"/, 'wra
 const importTelegramUpdates = extractFunctionBody(navHotfix, 'importTelegramUpdates');
 assert.doesNotMatch(importTelegramUpdates, /withDashboardProxy/, 'Telegram import should not wait for the dashboard proxy');
 assert.match(importTelegramUpdates, /apiJson\("\/api\/manage\/telegram\/import"/, 'Telegram import should call the import API directly');
+const createFolderInCurrentPath = extractFunctionBody(navHotfix, 'createFolderInCurrentPath');
+assert.match(createFolderInCurrentPath, /apiJson\("\/api\/manage\/folder"/, 'new folder should call the create folder API');
+assert.match(createFolderInCurrentPath, /proxy\.currentPath/, 'new folder should use the current dashboard path as parent');
 assert.doesNotMatch(navHotfix, /window\.confirm/, 'trash permanent delete should not use browser confirm dialogs');
 
 const ensureUploadNav = extractFunctionBody(navHotfix, 'ensureUploadNav');
@@ -119,5 +123,6 @@ assert.match(headerActionsRuleMatch[0], /white-space:\s*nowrap/, 'dashboard logo
 assert.match(css, /\.cfib-trash-file-row/, 'trash modal should have selectable row layout styles');
 assert.match(css, /\.cfib-trash-toolbar/, 'trash modal should have a batch toolbar layout');
 assert.match(css, /\.cfib-confirm-modal/, 'permanent delete should have an in-app confirmation modal style');
+assert.match(css, /\.cfib-folder-input/, 'new folder modal should have input styles');
 assert.doesNotMatch(css, /quick-toolbar\[data-v-060c1790\]\s*\{[^}]*opacity:\s*0/, 'upload page quick toolbar should not be hidden by the nav hotfix');
 assert.doesNotMatch(css, /\.cfib-upload-home-hotfix \.more-dropdown\.desktop-only/, 'upload page native More dropdown should not be hidden by the nav hotfix');

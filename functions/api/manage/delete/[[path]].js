@@ -1,6 +1,12 @@
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { purgeCFCache, purgeRandomFileListCache, purgePublicFileListCache } from "../../../utils/purgeCache";
-import { addFileToIndex, batchAddFilesToIndex, removeFileFromIndex, batchRemoveFilesFromIndex } from "../../../utils/indexManager.js";
+import {
+    addFileToIndex,
+    batchAddFilesToIndex,
+    removeFileFromIndex,
+    batchRemoveFilesFromIndex,
+    FOLDER_PLACEHOLDER_FILE,
+} from "../../../utils/indexManager.js";
 import { getDatabase } from '../../../utils/databaseAdapter.js';
 import { DiscordAPI } from '../../../utils/storage/discordAPI.js';
 import { HuggingFaceAPI } from '../../../utils/storage/huggingfaceAPI.js';
@@ -47,6 +53,13 @@ export async function onRequest(context) {
 
             while (folderQueue.length > 0) {
                 const currentFolder = folderQueue.shift();
+                const placeholderId = buildFolderPlaceholderId(currentFolder.path);
+                if (placeholderId) {
+                    const placeholderDeleted = await deleteFolderPlaceholder(env, placeholderId);
+                    if (placeholderDeleted) {
+                        deletedFiles.push(placeholderId);
+                    }
+                }
 
                 // 获取指定目录下的所有文件
                 const listUrl = new URL(`${url.origin}/api/manage/list?count=-1&dir=${currentFolder.path}`);
@@ -240,6 +253,32 @@ async function deleteFile(env, fileId, cdnUrl, url) {
         return true;
     } catch (e) {
         console.error('Delete file failed:', e);
+        return false;
+    }
+}
+
+function buildFolderPlaceholderId(folderPath) {
+    const normalized = String(folderPath || '')
+        .replace(/\.\./g, '_')
+        .replace(/\\/g, '/')
+        .replace(/\/{2,}/g, '/')
+        .replace(/^\/+|\/+$/g, '');
+
+    return normalized ? `${normalized}/${FOLDER_PLACEHOLDER_FILE}` : '';
+}
+
+async function deleteFolderPlaceholder(env, placeholderId) {
+    try {
+        const db = getDatabase(env);
+        const item = await db.getWithMetadata(placeholderId);
+        if (!item?.metadata?.FolderPlaceholder) {
+            return false;
+        }
+
+        await db.delete(placeholderId);
+        return true;
+    } catch (error) {
+        console.warn('Delete folder placeholder failed:', error.message);
         return false;
     }
 }

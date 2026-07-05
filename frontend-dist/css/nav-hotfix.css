@@ -595,6 +595,38 @@
   margin-top: 18px;
 }
 
+.cfib-folder-panel {
+  width: min(440px, calc(100vw - 32px));
+}
+
+.cfib-folder-field {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  color: var(--cfib-nav-text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.cfib-folder-input {
+  width: 100%;
+  min-height: 38px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--cfib-nav-border);
+  border-radius: 8px;
+  background: var(--el-fill-color-blank, #fff);
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+}
+
+.cfib-folder-input:focus {
+  border-color: var(--cfib-nav-accent);
+  box-shadow: 0 0 0 3px rgba(64, 158, 255, .16);
+}
+
 .cfib-import-summary {
   display: flex;
   flex-wrap: wrap;

@@ -26,6 +26,12 @@
       docs: "查看文档",
       trash: "回收站",
       importTelegram: "导入 Telegram",
+      newFolder: "新建文件夹",
+      newFolderTitle: "新建文件夹",
+      newFolderName: "文件夹名称",
+      newFolderPlaceholder: "请输入文件夹名称",
+      creatingFolder: "正在新建文件夹...",
+      folderCreated: "文件夹已创建",
       close: "关闭",
       restore: "恢复",
       permanentDelete: "永久删除",
@@ -67,6 +73,12 @@
       docs: "Docs",
       trash: "Trash",
       importTelegram: "Import Telegram",
+      newFolder: "New Folder",
+      newFolderTitle: "New Folder",
+      newFolderName: "Folder name",
+      newFolderPlaceholder: "Enter folder name",
+      creatingFolder: "Creating folder...",
+      folderCreated: "Folder created",
       close: "Close",
       restore: "Restore",
       permanentDelete: "Delete Forever",
@@ -107,7 +119,8 @@
     history: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 4v4h4M12 7v5l3 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     announcement: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11v3a2 2 0 0 0 2 2h2l4 3v-3h2l6 3V5l-6 3H6a2 2 0 0 0-2 2v1Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M14 8v8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
     globe: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
-    docs: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H20v17H7.5A2.5 2.5 0 0 0 5 21.5v-17Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 6h8M8 10h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
+    docs: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5A2.5 2.5 0 0 1 7.5 2H20v17H7.5A2.5 2.5 0 0 0 5 21.5v-17Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M8 6h8M8 10h7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    folderPlus: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H9l2 2h7.5A2.5 2.5 0 0 1 21 8.5v8A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-10Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10.5v5M9.5 13h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
   };
 
   var dashboardModeStorageKey = "cfib-dashboard-mode";
@@ -402,6 +415,7 @@
     var wrap = document.createElement("div");
     wrap.className = "cfib-file-mode-actions";
     var actions = [
+      { key: "newFolder", icon: icons.folderPlus, label: "newFolder" },
       { key: "importTelegram", icon: icons.telegram, label: "importTelegram" }
     ];
 
@@ -424,6 +438,10 @@
   }
 
   function runFileModeAction(action) {
+    if (action === "newFolder") {
+      createFolderInCurrentPath();
+      return;
+    }
     if (action === "importTelegram") {
       importTelegramUpdates();
     }
@@ -949,6 +967,77 @@
       })).then(loadTrashFiles).catch(function (error) {
         renderError(text("trash"), error);
       });
+    });
+  }
+
+  function createFolderInCurrentPath() {
+    var proxy = findDashboardProxy();
+    var parent = proxy && typeof proxy.currentPath === "string" ? proxy.currentPath : "";
+    promptFolderName().then(function (folderName) {
+      if (!folderName) return;
+      showToast(text("creatingFolder"), "loading");
+      apiJson("/api/manage/folder", {
+        method: "POST",
+        body: JSON.stringify({ parent: parent, name: folderName })
+      })
+        .then(function () {
+          showToast(text("folderCreated"), "success");
+          if (proxy && typeof proxy.refreshFileList === "function") {
+            proxy.refreshFileList();
+          } else if (!refreshDashboardIfReady()) {
+            markDashboardRefreshPending();
+          }
+        })
+        .catch(function (error) {
+          showToast(error.message || String(error), "error");
+        });
+    });
+  }
+
+  function promptFolderName() {
+    return new Promise(function (resolve) {
+      var confirmModal = document.createElement("div");
+      confirmModal.className = "cfib-confirm-modal is-open";
+      confirmModal.innerHTML =
+        '<div class="cfib-confirm-backdrop" data-folder-action="cancel"></div>' +
+        '<section class="cfib-confirm-panel cfib-folder-panel" role="dialog" aria-modal="true">' +
+        '<h3 class="cfib-confirm-title">' + escapeHtml(text("newFolderTitle")) + '</h3>' +
+        '<label class="cfib-folder-field">' +
+        '<span>' + escapeHtml(text("newFolderName")) + '</span>' +
+        '<input class="cfib-folder-input" type="text" maxlength="120" data-folder-input="true" placeholder="' + escapeHtml(text("newFolderPlaceholder")) + '">' +
+        '</label>' +
+        '<div class="cfib-confirm-actions">' +
+        '<button type="button" class="cfib-secondary-btn" data-folder-action="cancel">' + escapeHtml(text("cancel")) + '</button>' +
+        '<button type="button" class="cfib-primary-btn" data-folder-action="confirm">' + escapeHtml(text("confirm")) + '</button>' +
+        '</div>' +
+        '</section>';
+
+      function finish(value) {
+        if (confirmModal.parentNode) confirmModal.parentNode.removeChild(confirmModal);
+        resolve(value);
+      }
+
+      function currentValue() {
+        var input = confirmModal.querySelector("[data-folder-input]");
+        return input ? input.value.trim() : "";
+      }
+
+      confirmModal.addEventListener("click", function (event) {
+        var button = event.target && event.target.closest("[data-folder-action]");
+        if (!button) return;
+        var action = button.dataset.folderAction;
+        if (action === "cancel") finish("");
+        if (action === "confirm") finish(currentValue());
+      });
+
+      confirmModal.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") finish("");
+        if (event.key === "Enter") finish(currentValue());
+      });
+
+      document.body.appendChild(confirmModal);
+      var input = confirmModal.querySelector("[data-folder-input]");
+      if (input) input.focus();
     });
   }
 

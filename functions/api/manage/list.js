@@ -1,6 +1,6 @@
 import {
     readIndex, mergeOperationsToIndex, deleteAllOperations, rebuildIndex,
-    getIndexInfo, getIndexStorageStats
+    getIndexInfo, getIndexStorageStats, isFolderPlaceholder
 } from '../../utils/indexManager.js';
 import { getDatabase } from '../../utils/databaseAdapter.js';
 import { createMetadataViewContext, serializeFileRecordForManagement } from '../../utils/metadata/metadataView.js';
@@ -428,13 +428,14 @@ async function getAllFileRecords(env, dir, filters = {}) {
         }
 
         if (filters.includeSubdirFiles) {
+            const visibleRecords = allRecords.filter(item => !isFolderPlaceholder(item.name, item.metadata));
             return {
-                files: allRecords,
+                files: visibleRecords,
                 directories: [],
-                totalCount: allRecords.length,
-                directFileCount: allRecords.length,
+                totalCount: visibleRecords.length,
+                directFileCount: visibleRecords.length,
                 directFolderCount: 0,
-                returnedCount: allRecords.length
+                returnedCount: visibleRecords.length
             };
         }
 
@@ -446,7 +447,7 @@ async function getAllFileRecords(env, dir, filters = {}) {
             const firstSlashIndex = subDir.indexOf('/');
             if (firstSlashIndex !== -1) {
                 directories.add(dir + subDir.substring(0, firstSlashIndex));
-            } else {
+            } else if (!isFolderPlaceholder(item.name, item.metadata)) {
                 filteredRecords.push(item);
             }
         });

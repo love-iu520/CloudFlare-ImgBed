@@ -48,6 +48,11 @@ const INDEX_CHUNK_SIZE_D1 = 500; // D1 数据库分块大小
 const INDEX_CHUNK_SIZE_KV = 5000; // KV 存储分块大小
 const KV_LIST_LIMIT = 1000; // 数据库列出批量大小
 const BATCH_SIZE = 10; // 批量处理大小
+export const FOLDER_PLACEHOLDER_FILE = '.cfib-folder';
+
+export function isFolderPlaceholder(fileId = '', metadata = {}) {
+    return metadata?.FolderPlaceholder === true || String(fileId || '').endsWith(`/${FOLDER_PLACEHOLDER_FILE}`);
+}
 
 /**
  * 根据数据库类型获取索引分块大小
@@ -707,7 +712,7 @@ export async function readIndex(context, options = {}) {
         // 如果只需要总数
         if (countOnly) {
             return {
-                totalCount: filteredFiles.length,
+                totalCount: filteredFiles.filter(file => !isFolderPlaceholder(file.id, file.metadata)).length,
                 indexLastUpdated: index.lastUpdated
             };
         }
@@ -718,7 +723,9 @@ export async function readIndex(context, options = {}) {
         let resultFiles = filteredFiles;
 
         // 计算当前目录下的直接文件（不包含子目录文件）
-        const directFiles = filteredFiles.filter(file => {
+        const visibleFiles = filteredFiles.filter(file => !isFolderPlaceholder(file.id, file.metadata));
+
+        const directFiles = visibleFiles.filter(file => {
             const fileDir = file.metadata.Directory ? file.metadata.Directory : extractDirectory(file.id);
             return fileDir === dirPrefix;
         });
@@ -727,6 +734,8 @@ export async function readIndex(context, options = {}) {
         // 如果不包含子目录文件，获取当前目录下的直接文件
         if (!includeSubdirFiles) {
             resultFiles = directFiles;
+        } else {
+            resultFiles = visibleFiles;
         }
 
         if (count !== -1) {
