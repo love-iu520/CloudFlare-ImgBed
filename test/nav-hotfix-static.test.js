@@ -71,27 +71,12 @@ assert.match(importTelegramUpdates, /apiJson\("\/api\/manage\/telegram\/import"/
 
 const ensureUploadNav = extractFunctionBody(navHotfix, 'ensureUploadNav');
 assert.match(ensureUploadNav, /cfib-upload-home-hotfix/, 'upload page should receive the unified upload layout marker');
-assert.match(ensureUploadNav, /ensureUploadTools\(host\)/, 'upload page should mount left-side theme and language tools');
-
-const ensureUploadTools = extractFunctionBody(navHotfix, 'ensureUploadTools');
-assert.match(ensureUploadTools, /cfib-upload-tools/, 'upload tools wrapper should be created');
-assert.match(ensureUploadTools, /toggle-dark-button\.desktop-only/, 'upload tools should reuse the existing theme toggle');
-assert.match(ensureUploadTools, /makeUploadLanguageButton/, 'upload tools should provide a language control');
+assert.match(ensureUploadNav, /makeNav\("cfib-upload-nav", false\)/, 'upload nav should not render the More dropdown');
+assert.match(ensureUploadNav, /makeAdminActions\(\)/, 'upload nav should show the recycle bin action like other pages');
+assert.doesNotMatch(ensureUploadNav, /ensureUploadTools\(host\)/, 'upload page should not move its native theme or language controls');
 
 const ensureTabsUnifiedLayout = extractFunctionBody(navHotfix, 'ensureTabsUnifiedLayout');
 assert.match(ensureTabsUnifiedLayout, /cfib-header-hotfix/, 'dashboard header should receive a stable layout marker');
-
-const makeUploadActions = extractFunctionBody(navHotfix, 'makeUploadActions');
-assert.match(makeUploadActions, /data-action="uploadMethod"/, 'upload more menu should preserve upload method switching');
-assert.match(makeUploadActions, /data-action="history"/, 'upload more menu should preserve upload history');
-assert.match(makeUploadActions, /data-action="announcement"/, 'upload more menu should preserve announcements');
-assert.match(makeUploadActions, /data-action="language"/, 'upload more menu should preserve language switching');
-assert.match(makeUploadActions, /data-action="docs"/, 'upload more menu should preserve docs access');
-
-const runUploadAction = extractFunctionBody(navHotfix, 'runUploadAction');
-assert.match(runUploadAction, /runUploadProxyCommand\("toggleUploadMethod"\)/, 'upload method switching should delegate to the upload Vue component');
-assert.match(runUploadAction, /runUploadProxyCommand\("showHistory"\)/, 'upload history should delegate to the upload Vue component');
-assert.match(runUploadAction, /runUploadProxyCommand\("toggleLanguage"\)/, 'upload language switching should delegate to the upload Vue component');
 
 const css = readFileSync(new URL('../frontend-dist/css/nav-hotfix.css', import.meta.url), 'utf8');
 const adminNavRuleMatch = css.match(/\.cfib-tabs-hotfix \.cfib-admin-nav\s*\{[^}]*\}/);
@@ -105,12 +90,13 @@ const unifiedNavRuleMatch = css.match(/\.cfib-tabs-hotfix\.cfib-tabs-unified \.c
 assert.ok(unifiedNavRuleMatch, 'unified DashboardTabs should center the admin nav');
 assert.match(unifiedNavRuleMatch[0], /grid-column:\s*2/, 'admin nav should occupy the center grid column');
 assert.match(css, /\.cfib-header-hotfix/, 'dashboard header should switch to a grid overlay for true centered nav');
-const uploadToolsRuleMatch = css.match(/\.cfib-upload-home-hotfix \.cfib-upload-tools\s*\{[^}]*\}/);
-assert.ok(uploadToolsRuleMatch, 'upload page should have a left-side tools rule');
-assert.match(uploadToolsRuleMatch[0], /left:\s*24px/, 'upload page tools should sit at the left edge on desktop');
-const uploadToolsDesktopRuleMatch = css.match(/\.cfib-upload-home-hotfix \.cfib-upload-tools \.desktop-only\s*\{[^}]*\}/);
-assert.ok(uploadToolsDesktopRuleMatch, 'upload tools should override the legacy mobile desktop-only rule');
-assert.match(uploadToolsDesktopRuleMatch[0], /display:\s*inline-flex !important/, 'upload tools should keep the moved theme toggle visible');
-const uploadLegacyMenuRuleMatch = css.match(/\.cfib-upload-home-hotfix \.more-dropdown\.desktop-only,[\s\S]*?\.cfib-upload-home-hotfix \.mobile-more-dropdown\.mobile-only\s*\{[^}]*\}/);
-assert.ok(uploadLegacyMenuRuleMatch, 'legacy upload more menus should be hidden when hotfix layout is active');
-assert.match(uploadLegacyMenuRuleMatch[0], /display:\s*none !important/, 'legacy upload more menus should not compete with the unified More menu');
+const headerToolsRuleMatch = css.match(/\.cfib-header-hotfix \.cfib-tabs-tools\s*\{[^}]*\}/);
+assert.ok(headerToolsRuleMatch, 'dashboard header tools should have a fixed left placement');
+assert.match(headerToolsRuleMatch[0], /left:\s*18px/, 'dashboard theme and language controls should sit at the far left');
+const headerActionsRuleMatch = css.match(/\.cfib-header-hotfix > \.actions,\s*\.cfib-header-hotfix > \.header-action,\s*\.cfib-header-hotfix > \.header-actions\s*\{[^}]*\}/);
+assert.ok(headerActionsRuleMatch, 'dashboard header action containers should share a no-wrap right placement');
+assert.match(headerActionsRuleMatch[0], /grid-column:\s*3/, 'dashboard logout controls should stay on the right edge');
+assert.match(headerActionsRuleMatch[0], /grid-row:\s*1/, 'dashboard logout controls should stay on the first header row');
+assert.match(headerActionsRuleMatch[0], /white-space:\s*nowrap/, 'dashboard logout controls should not wrap below the theme controls');
+assert.doesNotMatch(css, /quick-toolbar\[data-v-060c1790\]\s*\{[^}]*opacity:\s*0/, 'upload page quick toolbar should not be hidden by the nav hotfix');
+assert.doesNotMatch(css, /\.cfib-upload-home-hotfix \.more-dropdown\.desktop-only/, 'upload page native More dropdown should not be hidden by the nav hotfix');

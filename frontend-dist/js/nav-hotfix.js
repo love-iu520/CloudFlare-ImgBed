@@ -981,7 +981,6 @@
     var existing = document.querySelector(".cfib-upload-nav");
     if (normalizedPath() !== "/") {
       if (existing) existing.remove();
-      resetUploadTools(host);
       if (host) host.classList.remove("cfib-upload-home-hotfix");
       return;
     }
@@ -989,13 +988,18 @@
     if (!host) return;
 
     host.classList.add("cfib-upload-home-hotfix");
-    ensureUploadTools(host);
 
     if (!existing) {
-      existing = makeNav("cfib-upload-nav", true);
+      existing = makeNav("cfib-upload-nav", false);
       host.appendChild(existing);
     }
+    var uploadActions = existing.querySelector(".cfib-upload-actions");
+    if (uploadActions) uploadActions.remove();
+    if (!existing.querySelector(".cfib-admin-actions")) {
+      existing.appendChild(makeAdminActions());
+    }
     updateNav(existing);
+    updateAdminActions(existing);
   }
 
   function makeUploadLanguageButton() {
@@ -1092,17 +1096,8 @@
     updateAdminActions(nav);
   }
 
-  function normalizeLegacyUploadMenu() {
-    if (normalizedPath() !== "/") return;
-
-    document.querySelectorAll(".more-dropdown.desktop-only, .mobile-more-dropdown.mobile-only").forEach(function (node) {
-      node.setAttribute("aria-hidden", "true");
-    });
-  }
-
   function refresh() {
     ensureUploadNav();
-    normalizeLegacyUploadMenu();
     applyPendingDashboardMode();
     flushPendingDashboardRefresh();
     enforceDashboardModeRefresh();
