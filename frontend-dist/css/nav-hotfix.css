@@ -368,6 +368,53 @@
   margin-bottom: 12px;
 }
 
+.cfib-trash-toolbar {
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cfib-trash-select-all,
+.cfib-trash-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.cfib-trash-select-all {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.cfib-trash-check {
+  justify-content: center;
+}
+
+.cfib-trash-select-all input,
+.cfib-trash-check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--cfib-nav-accent);
+  cursor: pointer;
+}
+
+.cfib-trash-selection {
+  color: var(--el-text-color-secondary, #64748b);
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.cfib-trash-bulk-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .cfib-modal-state,
 .cfib-modal-note,
 .cfib-modal-error {
@@ -396,6 +443,10 @@
   border: 1px solid rgba(148, 163, 184, .28);
   border-radius: 8px;
   background: rgba(248, 250, 252, .72);
+}
+
+.cfib-trash-file-row {
+  grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
 .cfib-file-main {
@@ -476,6 +527,72 @@
 
 .cfib-danger-btn:hover {
   background: rgba(220, 38, 38, .08);
+}
+
+.cfib-secondary-btn:disabled,
+.cfib-danger-btn:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.cfib-confirm-modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 3200;
+}
+
+.cfib-confirm-modal.is-open {
+  display: flex;
+}
+
+.cfib-confirm-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, .46);
+}
+
+.cfib-confirm-panel {
+  position: relative;
+  width: min(420px, calc(100vw - 32px));
+  padding: 22px;
+  border: 1px solid var(--cfib-nav-border);
+  border-radius: 8px;
+  background: var(--admin-container-background, #fff);
+  color: var(--cfib-nav-text);
+  box-shadow: 0 24px 64px rgba(15, 23, 42, .26);
+}
+
+.cfib-confirm-title {
+  margin: 0 0 10px;
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.cfib-confirm-message,
+.cfib-confirm-note {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.cfib-confirm-message {
+  word-break: break-all;
+}
+
+.cfib-confirm-note {
+  margin-top: 6px;
+  color: var(--el-text-color-secondary, #64748b);
+}
+
+.cfib-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
 }
 
 .cfib-import-summary {
@@ -664,6 +781,24 @@ html.dark .cfib-file-row {
 
   .cfib-file-row {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cfib-trash-file-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .cfib-trash-file-row .cfib-file-actions {
+    grid-column: 1 / -1;
+  }
+
+  .cfib-trash-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .cfib-trash-bulk-actions {
+    justify-content: flex-start;
+    margin-left: 0;
   }
 
   .cfib-file-actions {

@@ -41,7 +41,14 @@
       restoreSelected: "恢复选中",
       restoreDone: "已恢复",
       selectFilesFirst: "请先选择文件",
-      dashboardUnavailable: "文件管理界面尚未就绪"
+      dashboardUnavailable: "文件管理界面尚未就绪",
+      selectAll: "全选",
+      selectedCount: "已选",
+      deleteSelected: "删除选中",
+      confirm: "确定",
+      cancel: "取消",
+      confirmPermanentDelete: "确认永久删除？",
+      permanentDeleteTip: "永久删除后无法恢复"
     },
     en: {
       dashboard: "Files",
@@ -75,7 +82,14 @@
       restoreSelected: "Restore Selected",
       restoreDone: "Restored",
       selectFilesFirst: "Select files first",
-      dashboardUnavailable: "File manager is not ready"
+      dashboardUnavailable: "File manager is not ready",
+      selectAll: "Select All",
+      selectedCount: "Selected",
+      deleteSelected: "Delete Selected",
+      confirm: "Confirm",
+      cancel: "Cancel",
+      confirmPermanentDelete: "Delete permanently?",
+      permanentDeleteTip: "This cannot be undone"
     }
   };
 
@@ -101,6 +115,8 @@
   var pendingDashboardMode = "";
   var currentDashboardMode = "";
   var dashboardModeEnforcePending = false;
+  var trashModalFiles = [];
+  var trashModalSelection = {};
 
   function locale() {
     return localStorage.getItem("app-locale") === "en" ? "en" : "zh-CN";
@@ -386,8 +402,7 @@
     var wrap = document.createElement("div");
     wrap.className = "cfib-file-mode-actions";
     var actions = [
-      { key: "importTelegram", icon: icons.telegram, label: "importTelegram" },
-      { key: "restoreTrash", icon: icons.restore, label: "restoreSelected" }
+      { key: "importTelegram", icon: icons.telegram, label: "importTelegram" }
     ];
 
     actions.forEach(function (action) {
@@ -411,10 +426,6 @@
   function runFileModeAction(action) {
     if (action === "importTelegram") {
       importTelegramUpdates();
-      return;
-    }
-    if (action === "restoreTrash") {
-      restoreSelectedTrashFiles();
     }
   }
 
@@ -445,19 +456,16 @@
   function updateFileModeActions(wrap) {
     var proxy = findDashboardProxy();
     var trashMode = isTrashMode(proxy);
-    var selectedCount = proxy && Array.isArray(proxy.selectedFiles) ? proxy.selectedFiles.filter(function (file) {
-      return file && !file.isFolder;
-    }).length : 0;
-
     if (proxy) patchDashboardTrashDelete(proxy);
+
+    wrap.querySelectorAll('[data-file-mode-action="restoreTrash"]').forEach(function (button) {
+      button.remove();
+    });
 
     wrap.querySelectorAll("[data-file-mode-action]").forEach(function (button) {
       var action = button.dataset.fileModeAction;
-      var labelKey = action === "restoreTrash" ? "restoreSelected" : action;
-      button.title = text(labelKey);
-      button.setAttribute("aria-label", text(labelKey));
-      button.hidden = action === "restoreTrash" && !trashMode;
-      button.disabled = action === "restoreTrash" && selectedCount === 0;
+      button.title = text(action);
+      button.setAttribute("aria-label", text(action));
     });
 
     wrap.querySelectorAll("[data-label]").forEach(function (node) {
@@ -682,14 +690,16 @@
       if (!isTrashMode(proxy)) {
         return proxy.__cfibOriginalHandleDelete.apply(proxy, arguments);
       }
-      if (!window.confirm(text("permanentDelete") + ": " + fileId)) return;
-      apiJson("/api/manage/delete/" + encodeManagePath(fileId) + "?permanent=true", { method: "DELETE" })
-        .then(function () {
-          return proxy.refreshFileList();
-        })
-        .catch(function (error) {
-          showToast(error.message || String(error), "error");
-        });
+      confirmPermanentDelete(fileId).then(function (confirmed) {
+        if (!confirmed) return;
+        apiJson("/api/manage/delete/" + encodeManagePath(fileId) + "?permanent=true", { method: "DELETE" })
+          .then(function () {
+            return proxy.refreshFileList();
+          })
+          .catch(function (error) {
+            showToast(error.message || String(error), "error");
+          });
+      });
     };
 
     proxy.handleBatchDelete = function () {
@@ -704,44 +714,18 @@
         showToast(text("selectFilesFirst"), "error");
         return;
       }
-      if (!window.confirm(text("permanentDelete") + ": " + selected.length)) return;
-
-      Promise.all(selected.map(function (file) {
-        return apiJson("/api/manage/delete/" + encodeManagePath(file.name) + "?permanent=true", { method: "DELETE" });
-      })).then(function () {
-        proxy.selectedFiles = [];
-        return proxy.refreshFileList();
-      }).catch(function (error) {
-        showToast(error.message || String(error), "error");
+      confirmPermanentDelete(selected.length).then(function (confirmed) {
+        if (!confirmed) return;
+        Promise.all(selected.map(function (file) {
+          return apiJson("/api/manage/delete/" + encodeManagePath(file.name) + "?permanent=true", { method: "DELETE" });
+        })).then(function () {
+          proxy.selectedFiles = [];
+          return proxy.refreshFileList();
+        }).catch(function (error) {
+          showToast(error.message || String(error), "error");
+        });
       });
     };
-  }
-
-  function restoreSelectedTrashFiles() {
-    var proxy = findDashboardProxy();
-    if (!proxy || !isTrashMode(proxy)) {
-      showToast(text("dashboardUnavailable"), "error");
-      return;
-    }
-
-    patchDashboardTrashDelete(proxy);
-    var selected = Array.isArray(proxy.selectedFiles) ? proxy.selectedFiles.filter(function (file) {
-      return file && !file.isFolder;
-    }) : [];
-    if (!selected.length) {
-      showToast(text("selectFilesFirst"), "error");
-      return;
-    }
-
-    Promise.all(selected.map(function (file) {
-      return apiJson("/api/manage/trash/restore/" + encodeManagePath(file.name), { method: "POST" });
-    })).then(function () {
-      showToast(text("restoreDone") + ": " + selected.length, "success");
-      proxy.selectedFiles = [];
-      return proxy.refreshFileList();
-    }).catch(function (error) {
-      showToast(error.message || String(error), "error");
-    });
   }
 
   function ensureModal() {
@@ -785,6 +769,39 @@
     showModal(title, '<div class="cfib-modal-state">' + escapeHtml(text("loading")) + '</div>');
   }
 
+  function confirmPermanentDelete(detail) {
+    return new Promise(function (resolve) {
+      var confirmModal = document.createElement("div");
+      confirmModal.className = "cfib-confirm-modal is-open";
+      confirmModal.innerHTML =
+        '<div class="cfib-confirm-backdrop" data-confirm-action="cancel"></div>' +
+        '<section class="cfib-confirm-panel" role="alertdialog" aria-modal="true">' +
+        '<h3 class="cfib-confirm-title">' + escapeHtml(text("confirmPermanentDelete")) + '</h3>' +
+        '<p class="cfib-confirm-message">' + escapeHtml(text("permanentDelete")) + ': ' + escapeHtml(detail) + '</p>' +
+        '<p class="cfib-confirm-note">' + escapeHtml(text("permanentDeleteTip")) + '</p>' +
+        '<div class="cfib-confirm-actions">' +
+        '<button class="cfib-secondary-btn" type="button" data-confirm-action="cancel">' + escapeHtml(text("cancel")) + '</button>' +
+        '<button class="cfib-danger-btn" type="button" data-confirm-action="confirm">' + escapeHtml(text("confirm")) + '</button>' +
+        '</div>' +
+        '</section>';
+
+      function finish(confirmed) {
+        confirmModal.remove();
+        resolve(confirmed);
+      }
+
+      confirmModal.addEventListener("click", function (event) {
+        var action = event.target && event.target.dataset.confirmAction;
+        if (action === "confirm") finish(true);
+        if (action === "cancel") finish(false);
+      });
+
+      document.body.appendChild(confirmModal);
+      var confirmButton = confirmModal.querySelector('[data-confirm-action="confirm"]');
+      if (confirmButton) confirmButton.focus();
+    });
+  }
+
   function apiJson(url, options) {
     return fetch(url, Object.assign({
       credentials: "include",
@@ -809,7 +826,11 @@
   function loadTrashFiles() {
     apiJson("/api/manage/list?listType=Trash&count=-1&recursive=true")
       .then(function (data) {
-        renderTrashFiles(data.files || []);
+        trashModalFiles = (data.files || []).filter(function (file) {
+          return file && !file.isFolder;
+        });
+        trashModalSelection = {};
+        renderTrashFiles(trashModalFiles);
       })
       .catch(function (error) {
         renderError(text("trash"), error);
@@ -817,8 +838,21 @@
   }
 
   function renderTrashFiles(files) {
-    var html = '<div class="cfib-modal-toolbar"><button class="cfib-secondary-btn" type="button" data-trash-action="refresh">' + escapeHtml(text("refresh")) + '</button></div>';
-    html += renderFileList(files, function (file) {
+    var selectedCount = selectedTrashFiles().length;
+    var allSelected = files.length > 0 && selectedCount === files.length;
+    var html = '<div class="cfib-modal-toolbar cfib-trash-toolbar">' +
+      '<label class="cfib-trash-select-all">' +
+      '<input type="checkbox" data-trash-action="selectAll"' + (allSelected ? " checked" : "") + (files.length ? "" : " disabled") + '>' +
+      '<span>' + escapeHtml(text("selectAll")) + '</span>' +
+      '</label>' +
+      '<span class="cfib-trash-selection">' + escapeHtml(text("selectedCount")) + ': ' + selectedCount + '</span>' +
+      '<div class="cfib-trash-bulk-actions">' +
+      '<button class="cfib-secondary-btn" type="button" data-trash-action="bulkRestore"' + (selectedCount ? "" : " disabled") + '>' + escapeHtml(text("restoreSelected")) + '</button>' +
+      '<button class="cfib-danger-btn" type="button" data-trash-action="bulkPermanent"' + (selectedCount ? "" : " disabled") + '>' + escapeHtml(text("deleteSelected")) + '</button>' +
+      '<button class="cfib-secondary-btn" type="button" data-trash-action="refresh">' + escapeHtml(text("refresh")) + '</button>' +
+      '</div>' +
+      '</div>';
+    html += renderTrashFileList(files, function (file) {
       var filePath = encodeFilePath(file.name);
       return '<button class="cfib-secondary-btn" type="button" data-trash-action="restore" data-file="' + escapeHtml(file.name) + '">' + escapeHtml(text("restore")) + '</button>' +
         '<button class="cfib-danger-btn" type="button" data-trash-action="permanent" data-file="' + escapeHtml(file.name) + '">' + escapeHtml(text("permanentDelete")) + '</button>' +
@@ -834,32 +868,88 @@
           loadTrashFiles();
           return;
         }
+        if (action === "selectAll") {
+          setAllTrashSelection(button.checked);
+          return;
+        }
+        if (action === "select") {
+          setTrashSelection(button.dataset.file, button.checked);
+          return;
+        }
+        if (action === "bulkRestore") {
+          restoreTrashFiles(selectedTrashFiles());
+          return;
+        }
+        if (action === "bulkPermanent") {
+          permanentDeleteFiles(selectedTrashFiles());
+          return;
+        }
 
         var fileId = button.dataset.file;
         if (action === "restore") {
-          restoreTrashFile(fileId);
+          restoreTrashFiles([fileId]);
         } else if (action === "permanent") {
-          permanentDeleteFile(fileId);
+          permanentDeleteFiles([fileId]);
         }
       });
     });
   }
 
-  function restoreTrashFile(fileId) {
-    apiJson("/api/manage/trash/restore/" + encodeManagePath(fileId), { method: "POST" })
+  function selectedTrashFiles() {
+    return trashModalFiles.map(function (file) {
+      return file.name;
+    }).filter(function (fileId) {
+      return trashModalSelection[fileId];
+    });
+  }
+
+  function setTrashSelection(fileId, selected) {
+    if (selected) {
+      trashModalSelection[fileId] = true;
+    } else {
+      delete trashModalSelection[fileId];
+    }
+    renderTrashFiles(trashModalFiles);
+  }
+
+  function setAllTrashSelection(selected) {
+    trashModalSelection = {};
+    if (selected) {
+      trashModalFiles.forEach(function (file) {
+        trashModalSelection[file.name] = true;
+      });
+    }
+    renderTrashFiles(trashModalFiles);
+  }
+
+  function restoreTrashFiles(fileIds) {
+    if (!fileIds.length) {
+      showToast(text("selectFilesFirst"), "error");
+      return;
+    }
+    Promise.all(fileIds.map(function (fileId) {
+      return apiJson("/api/manage/trash/restore/" + encodeManagePath(fileId), { method: "POST" });
+    }))
       .then(loadTrashFiles)
       .catch(function (error) {
         renderError(text("trash"), error);
       });
   }
 
-  function permanentDeleteFile(fileId) {
-    if (!window.confirm(text("permanentDelete") + ": " + fileId)) return;
-    apiJson("/api/manage/delete/" + encodeManagePath(fileId) + "?permanent=true", { method: "DELETE" })
-      .then(loadTrashFiles)
-      .catch(function (error) {
+  function permanentDeleteFiles(fileIds) {
+    if (!fileIds.length) {
+      showToast(text("selectFilesFirst"), "error");
+      return;
+    }
+    var detail = fileIds.length === 1 ? fileIds[0] : fileIds.length;
+    confirmPermanentDelete(detail).then(function (confirmed) {
+      if (!confirmed) return;
+      Promise.all(fileIds.map(function (fileId) {
+        return apiJson("/api/manage/delete/" + encodeManagePath(fileId) + "?permanent=true", { method: "DELETE" });
+      })).then(loadTrashFiles).catch(function (error) {
         renderError(text("trash"), error);
       });
+    });
   }
 
   function importTelegramUpdates() {
@@ -917,6 +1007,35 @@
         }).join("") + '</div>'
         : '';
       return '<article class="cfib-file-row">' +
+        '<div class="cfib-file-main">' +
+        '<strong>' + escapeHtml(metadata.FileName || file.name) + '</strong>' +
+        '<span>' + escapeHtml(file.name) + '</span>' +
+        tags +
+        '</div>' +
+        '<div class="cfib-file-actions">' + actionRenderer(file) + '</div>' +
+        '</article>';
+    }).join("") + '</div>';
+  }
+
+  function renderTrashFileList(files, actionRenderer) {
+    if (!files.length) {
+      return '<div class="cfib-modal-state">' + escapeHtml(text("noFiles")) + '</div>';
+    }
+
+    return '<div class="cfib-file-list cfib-trash-file-list">' + files.map(function (file) {
+      var metadata = file.metadata || {};
+      var fileId = file.name;
+      var checked = trashModalSelection[fileId] ? " checked" : "";
+      var tags = Array.isArray(metadata.Tags) && metadata.Tags.length
+        ? '<div class="cfib-file-tags">' + metadata.Tags.map(function (tag) {
+          return '<span>' + escapeHtml(tag) + '</span>';
+        }).join("") + '</div>'
+        : '';
+      return '<article class="cfib-file-row cfib-trash-file-row">' +
+        '<label class="cfib-trash-check">' +
+        '<input type="checkbox" data-trash-action="select" data-file="' + escapeHtml(fileId) + '"' + checked + '>' +
+        '<span></span>' +
+        '</label>' +
         '<div class="cfib-file-main">' +
         '<strong>' + escapeHtml(metadata.FileName || file.name) + '</strong>' +
         '<span>' + escapeHtml(file.name) + '</span>' +

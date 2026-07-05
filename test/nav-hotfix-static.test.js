@@ -33,8 +33,11 @@ assert.doesNotMatch(adminActions, /sourceGroups/, 'top nav should not include Te
 const fileModeActions = extractFunctionBody(navHotfix, 'makeFileModeActions');
 assert.match(fileModeActions, /cfib-file-mode-actions/, 'file management tool actions should be rendered in the dashboard area');
 assert.match(fileModeActions, /key: "importTelegram"/, 'dashboard tool actions should include Telegram import');
-assert.match(fileModeActions, /key: "restoreTrash"/, 'dashboard tool actions should include trash restore');
+assert.doesNotMatch(fileModeActions, /key: "restoreTrash"/, 'dashboard tool actions should not include the unused trash restore shortcut');
 assert.doesNotMatch(fileModeActions, /sourceGroups/, 'dashboard tool actions should not include Telegram source groups');
+
+const updateFileModeActions = extractFunctionBody(navHotfix, 'updateFileModeActions');
+assert.match(updateFileModeActions, /data-file-mode-action="restoreTrash"/, 'legacy trash restore shortcut should be removed if it already exists');
 
 const ensureAdminNav = extractFunctionBody(navHotfix, 'ensureAdminNav');
 assert.match(ensureAdminNav, /makeAdminActions\(\)/, 'admin nav should mount file management actions in the top bar');
@@ -53,6 +56,20 @@ const loadTrashFiles = extractFunctionBody(navHotfix, 'loadTrashFiles');
 assert.match(loadTrashFiles, /listType=Trash/, 'trash modal should request only trashed files');
 assert.match(loadTrashFiles, /recursive=true/, 'trash modal should list deleted files across folders');
 
+const renderTrashFiles = extractFunctionBody(navHotfix, 'renderTrashFiles');
+assert.match(renderTrashFiles, /data-trash-action="selectAll"/, 'trash modal should include a select-all checkbox');
+assert.match(renderTrashFiles, /data-trash-action="bulkRestore"/, 'trash modal should include bulk restore');
+assert.match(renderTrashFiles, /data-trash-action="bulkPermanent"/, 'trash modal should include bulk permanent delete');
+assert.match(renderTrashFiles, /selectedTrashFiles\(\)/, 'bulk trash actions should operate on checked rows');
+
+const renderTrashFileList = extractFunctionBody(navHotfix, 'renderTrashFileList');
+assert.match(renderTrashFileList, /type="checkbox"/, 'trash rows should include checkboxes');
+assert.match(renderTrashFileList, /data-trash-action="select"/, 'trash row checkboxes should update selection');
+
+const confirmPermanentDelete = extractFunctionBody(navHotfix, 'confirmPermanentDelete');
+assert.match(confirmPermanentDelete, /cfib-confirm-modal/, 'permanent delete should use an in-app confirmation modal');
+assert.doesNotMatch(confirmPermanentDelete, /window\.confirm/, 'in-app confirmation should not use the browser confirm dialog');
+
 const applyDashboardMode = extractFunctionBody(navHotfix, 'applyDashboardMode');
 assert.match(applyDashboardMode, /trashDashboardFilters\(\)/, 'trash mode should use the trash-only dashboard filters');
 assert.match(applyDashboardMode, /currentDashboardMode = mode/, 'dashboard mode should persist beyond the initial navigation request');
@@ -68,6 +85,7 @@ assert.match(patchDashboardModeRefresh, /currentDashboardMode === "trash"/, 'wra
 const importTelegramUpdates = extractFunctionBody(navHotfix, 'importTelegramUpdates');
 assert.doesNotMatch(importTelegramUpdates, /withDashboardProxy/, 'Telegram import should not wait for the dashboard proxy');
 assert.match(importTelegramUpdates, /apiJson\("\/api\/manage\/telegram\/import"/, 'Telegram import should call the import API directly');
+assert.doesNotMatch(navHotfix, /window\.confirm/, 'trash permanent delete should not use browser confirm dialogs');
 
 const ensureUploadNav = extractFunctionBody(navHotfix, 'ensureUploadNav');
 assert.match(ensureUploadNav, /cfib-upload-home-hotfix/, 'upload page should receive the unified upload layout marker');
@@ -98,5 +116,8 @@ assert.ok(headerActionsRuleMatch, 'dashboard header action containers should sha
 assert.match(headerActionsRuleMatch[0], /grid-column:\s*3/, 'dashboard logout controls should stay on the right edge');
 assert.match(headerActionsRuleMatch[0], /grid-row:\s*1/, 'dashboard logout controls should stay on the first header row');
 assert.match(headerActionsRuleMatch[0], /white-space:\s*nowrap/, 'dashboard logout controls should not wrap below the theme controls');
+assert.match(css, /\.cfib-trash-file-row/, 'trash modal should have selectable row layout styles');
+assert.match(css, /\.cfib-trash-toolbar/, 'trash modal should have a batch toolbar layout');
+assert.match(css, /\.cfib-confirm-modal/, 'permanent delete should have an in-app confirmation modal style');
 assert.doesNotMatch(css, /quick-toolbar\[data-v-060c1790\]\s*\{[^}]*opacity:\s*0/, 'upload page quick toolbar should not be hidden by the nav hotfix');
 assert.doesNotMatch(css, /\.cfib-upload-home-hotfix \.more-dropdown\.desktop-only/, 'upload page native More dropdown should not be hidden by the nav hotfix');
