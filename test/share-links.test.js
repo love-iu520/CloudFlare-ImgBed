@@ -7,9 +7,11 @@ import {
   isPathWithinShare,
   normalizeShareTarget,
   revokeShareLink,
+  updateShareExpiry,
   validateShareTokenForFile,
 } from '../functions/utils/share/shareLinks.js';
 import { onRequest as manageShareRequest } from '../functions/api/manage/share/index.js';
+import { onRequest as manageSharePathRequest } from '../functions/api/manage/share/[[path]].js';
 import { onRequest as publicShareRequest } from '../functions/api/share/[[path]].js';
 import { returnWithCheck } from '../functions/file/fileTools.js';
 import { SqliteD1 } from '../deploy/server/sqliteD1.js';
@@ -180,6 +182,33 @@ describe('share links', () => {
     assert.ok(created.share.expiresAt >= beforeCreate + 604799000);
     assert.ok(created.share.expiresAt <= Date.now() + 604801000);
 
+    const beforeUpdate = Date.now();
+    const updateResponse = await manageSharePathRequest({
+      env,
+      request: jsonRequest(`https://img.example/api/manage/share/${created.share.id}`, {
+        expiresInSeconds: 3600,
+      }, 'PATCH'),
+      params: { path: created.share.id },
+    });
+    assert.equal(updateResponse.status, 200);
+
+    const updated = await updateResponse.json();
+    assert.equal(updated.success, true);
+    assert.equal(updated.share.id, created.share.id);
+    assert.ok(updated.share.expiresAt >= beforeUpdate + 3599000);
+    assert.ok(updated.share.expiresAt <= Date.now() + 3601000);
+
+    const permanentResponse = await manageSharePathRequest({
+      env,
+      request: jsonRequest(`https://img.example/api/manage/share/${created.share.id}`, {
+        expiresAt: null,
+      }, 'PATCH'),
+      params: { path: created.share.id },
+    });
+    assert.equal(permanentResponse.status, 200);
+    const permanent = await permanentResponse.json();
+    assert.equal(permanent.share.expiresAt, null);
+
     const token = created.url.split('/share/')[1];
     const publicResponse = await publicShareRequest({
       env,
@@ -245,7 +274,9 @@ describe('share links', () => {
     assert.equal(blocked.status, 403);
   });
 
-  it('stores share links in the D1 share_links table', async () => {
+  it('stores share links in the D1 share_links table', async function () {
+    this.timeout(5000);
+
     const d1 = new SqliteD1(':memory:');
     d1.exec(readFileSync(new URL('../database/init.sql', import.meta.url), 'utf8'));
     const env = { img_d1: d1 };
@@ -266,5 +297,10 @@ describe('share links', () => {
     });
     assert.equal(revoked.valid, false);
     assert.equal(revoked.reason, 'revoked');
+
+    const updated = await updateShareExpiry(env, created.share.id, {
+      expiresAt: null,
+    });
+    assert.equal(updated.expiresAt, null);
   });
 });

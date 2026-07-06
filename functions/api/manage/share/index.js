@@ -5,11 +5,12 @@ import {
     listShareLinks,
     normalizeShareTarget,
     revokeShareLink,
+    updateShareExpiry,
 } from '../../../utils/share/shareLinks.js';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400',
 };
@@ -34,6 +35,12 @@ export async function onRequest(context) {
             const url = new URL(request.url);
             const id = url.searchParams.get('id');
             return await revokeShare(env, id);
+        }
+
+        if (request.method === 'PATCH') {
+            const url = new URL(request.url);
+            const id = url.searchParams.get('id');
+            return await updateShare(request, env, id);
         }
 
         return jsonResponse({ success: false, message: 'Method not allowed' }, { status: 405 });
@@ -80,6 +87,37 @@ async function listShares(request, env) {
         shares: result.shares,
         cursor: result.cursor,
         listComplete: result.listComplete,
+    });
+}
+
+export async function updateShare(request, env, id) {
+    if (!id) {
+        return jsonResponse({ success: false, message: 'Share id is required' }, { status: 400 });
+    }
+
+    const body = await parseJsonBody(request);
+    if (!body || typeof body !== 'object') {
+        throw httpError(400, 'Invalid JSON body');
+    }
+    const options = {};
+    if (Object.prototype.hasOwnProperty.call(body, 'expiresAt')) {
+        options.expiresAt = body.expiresAt;
+    }
+    if (Object.prototype.hasOwnProperty.call(body, 'expiresInSeconds')) {
+        options.expiresInSeconds = body.expiresInSeconds;
+    }
+    if (!Object.prototype.hasOwnProperty.call(options, 'expiresAt') &&
+        !Object.prototype.hasOwnProperty.call(options, 'expiresInSeconds')) {
+        throw httpError(400, 'expiresAt or expiresInSeconds is required');
+    }
+    const share = await updateShareExpiry(env, id, options);
+    if (!share) {
+        return jsonResponse({ success: false, message: 'Share link not found' }, { status: 404 });
+    }
+
+    return jsonResponse({
+        success: true,
+        share,
     });
 }
 

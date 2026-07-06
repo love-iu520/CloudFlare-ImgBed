@@ -67,6 +67,7 @@
 ### 管理与公开能力
 
 - 管理端 API 位于 `functions/api/manage`，覆盖文件列表、删除、移动、重命名、白名单/黑名单、回收站恢复、标签、批量索引、系统配置、来源组、Telegram 导入和分享管理。
+- 分享管理 API 支持创建、列表、撤销和更新有效期；分享记录只保存 token hash 和前缀，不保存完整 token。
 - 公开能力包括 `/api/public/list`、`/random`、`/share/*`、`/api/share/*` 和 `/dav/*`。
 - 系统配置由 `functions/api/manage/sysConfig` 与 `functions/utils/sysConfig.js` 协作读取，配置主要持久化在数据库中。
 

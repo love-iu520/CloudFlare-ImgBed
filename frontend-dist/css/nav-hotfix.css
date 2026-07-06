@@ -519,7 +519,7 @@
 .cfib-primary-btn,
 .cfib-primary-link {
   border-color: transparent;
-  background: var(--cfib-nav-accent);
+  background: var(--cfib-nav-accent, #409eff);
   color: #fff;
 }
 
@@ -530,8 +530,8 @@
 
 .cfib-secondary-btn:hover,
 .cfib-source-group:hover {
-  border-color: var(--cfib-nav-accent);
-  color: var(--cfib-nav-accent);
+  border-color: var(--cfib-nav-accent, #409eff);
+  color: var(--cfib-nav-accent, #409eff);
 }
 
 .cfib-danger-btn {
@@ -637,7 +637,7 @@
 }
 
 .cfib-folder-input:focus {
-  border-color: var(--cfib-nav-accent);
+  border-color: var(--cfib-nav-accent, #409eff);
   box-shadow: 0 0 0 3px rgba(64, 158, 255, .16);
 }
 
@@ -703,8 +703,29 @@
 
 .cfib-share-row-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: flex-end;
+  gap: 8px;
+  max-width: 340px;
+}
+
+.cfib-share-row-actions .cfib-secondary-btn,
+.cfib-share-row-actions .cfib-danger-btn {
+  min-width: 64px;
+}
+
+.cfib-share-url-note {
+  color: var(--el-text-color-placeholder, #94a3b8);
+}
+
+.cfib-secondary-btn:disabled,
+.cfib-primary-btn:disabled,
+.cfib-primary-link.is-disabled,
+.cfib-danger-btn:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  filter: none;
 }
 
 .cfib-share-row.is-expired,

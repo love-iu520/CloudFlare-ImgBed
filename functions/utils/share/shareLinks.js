@@ -136,6 +136,28 @@ export async function revokeShareLink(env, id, now = Date.now()) {
     };
 }
 
+export async function updateShareExpiry(env, id, options = {}, now = Date.now()) {
+    if (!Object.prototype.hasOwnProperty.call(options, 'expiresAt') &&
+        !Object.prototype.hasOwnProperty.call(options, 'expiresInSeconds')) {
+        throw new Error('expiresAt or expiresInSeconds is required');
+    }
+
+    const db = getDatabase(env);
+    const existing = await db.getShareLinkById(id);
+    if (!existing) {
+        return null;
+    }
+
+    const updatedAt = normalizeNow(now);
+    const updated = {
+        ...existing,
+        expiresAt: normalizeExpiresAt(options, updatedAt),
+        updatedAt,
+    };
+    await db.putShareLink(updated);
+    return serializeShareForManagement(updated);
+}
+
 export async function incrementShareView(env, id, now = Date.now()) {
     if (!id) return;
     const db = getDatabase(env);

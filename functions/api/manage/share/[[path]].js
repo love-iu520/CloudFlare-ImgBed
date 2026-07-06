@@ -1,8 +1,8 @@
-import { revokeShare } from './index.js';
+import { revokeShare, updateShare } from './index.js';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'DELETE, OPTIONS',
+    'Access-Control-Allow-Methods': 'PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Max-Age': '86400',
 };
@@ -14,7 +14,7 @@ export async function onRequest(context) {
         return new Response(null, { status: 204, headers: corsHeaders });
     }
 
-    if (request.method !== 'DELETE') {
+    if (request.method !== 'DELETE' && request.method !== 'PATCH') {
         return new Response(JSON.stringify({
             success: false,
             message: 'Method not allowed',
@@ -25,5 +25,9 @@ export async function onRequest(context) {
     }
 
     const id = decodeURIComponent(String(params.path || '')).split('/')[0];
+    if (request.method === 'PATCH') {
+        return await updateShare(request, env, id);
+    }
+
     return await revokeShare(env, id);
 }

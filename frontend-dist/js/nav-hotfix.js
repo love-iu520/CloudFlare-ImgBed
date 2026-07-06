@@ -56,6 +56,9 @@
       revokeShareTitle: "撤销分享链接？",
       revokeShareTip: "撤销后该分享链接将不可访问",
       shareRevoked: "分享链接已撤销",
+      shareUpdated: "分享链接已更新",
+      editShareExpiry: "修改有效期",
+      shareUrlUnavailable: "完整链接仅在本浏览器创建后可用",
       copy: "复制",
       selectOneShareTarget: "请选择一个文件或文件夹，或取消选择以分享当前目录",
       newFolderTitle: "新建文件夹",
@@ -134,6 +137,9 @@
       revokeShareTitle: "Revoke share link?",
       revokeShareTip: "This share link will stop working after it is revoked",
       shareRevoked: "Share link revoked",
+      shareUpdated: "Share link updated",
+      editShareExpiry: "Edit expiry",
+      shareUrlUnavailable: "Full link is only available in this browser after creation",
       copy: "Copy",
       selectOneShareTarget: "Select one file or folder, or clear selection to share the current directory",
       newFolderTitle: "New Folder",
@@ -188,6 +194,7 @@
 
   var dashboardModeStorageKey = "cfib-dashboard-mode";
   var dashboardRefreshStorageKey = "cfib-dashboard-refresh-pending";
+  var shareUrlStorageKey = "cfib-share-url-cache";
   var pendingDashboardMode = "";
   var currentDashboardMode = "";
   var dashboardModeEnforcePending = false;
@@ -1136,6 +1143,7 @@
         body: JSON.stringify(body)
       })
         .then(function (data) {
+          rememberShareUrl(data.share, data.url);
           renderCreatedShare(data.url, data.share);
         })
         .catch(function (error) {
@@ -1165,26 +1173,36 @@
       }
     }
 
-    var domOptions = collectDomShareTargetOptions();
     var selected = Array.isArray(proxy.selectedFiles) ? proxy.selectedFiles.filter(Boolean) : [];
-    selected.forEach(function (file) {
-      addTarget(file, true);
-    });
-
-    addTarget({
-      isFolder: true,
-      name: typeof proxy.currentPath === "string" ? proxy.currentPath : findDashboardPathFromDom()
-    }, selected.length === 0 && !domOptions.some(function (target) { return target.__preferred; }));
-
-    domOptions.forEach(function (target) {
-      addTarget(target, target.__preferred);
-    });
-
     var rows = Array.isArray(proxy.paginatedTableData)
       ? proxy.paginatedTableData
       : Array.isArray(proxy.tableData)
         ? proxy.tableData
         : [];
+    var domOptions = collectDomShareTargetOptions(rows);
+    var hasPreferredDomTarget = domOptions.some(function (target) { return target.__preferred; });
+
+    selected.forEach(function (file) {
+      addTarget(file, true);
+    });
+
+    domOptions.filter(function (target) {
+      return target.__preferred;
+    }).forEach(function (target) {
+      addTarget(target, true);
+    });
+
+    addTarget({
+      isFolder: true,
+      name: typeof proxy.currentPath === "string" ? proxy.currentPath : findDashboardPathFromDom()
+    }, selected.length === 0 && !hasPreferredDomTarget);
+
+    domOptions.filter(function (target) {
+      return !target.__preferred;
+    }).forEach(function (target) {
+      addTarget(target, false);
+    });
+
     rows.forEach(function (file) {
       addTarget(file, false);
     });
@@ -1194,7 +1212,10 @@
 
   function normalizeShareTargetOption(file) {
     if (!file || typeof file !== "object") return null;
-    var selectedPath = file.name || file.id || file.fileId || "";
+    var selectedPath = file.name || file.id || file.fileId || file.path || file.key || "";
+    if (selectedPath && file.__shareBasePath && String(selectedPath).indexOf("/") === -1) {
+      selectedPath = joinSharePath(file.__shareBasePath, selectedPath);
+    }
     if (!selectedPath && !file.isFolder) return null;
     return {
       targetType: file.isFolder ? "directory" : "file",
@@ -1206,14 +1227,107 @@
     };
   }
 
-  function collectDomShareTargetOptions() {
+  function shareItemFromDomNode(node, rows) {
+    var itemNode = node && node.closest ? node.closest(".img-card, .file-card, .list-item") : null;
+    itemNode = itemNode || node;
+    var row = matchingShareRowFromDom(itemNode, rows);
+    if (row) return row;
+
+    var fileName = bestShareTextCandidate(itemNode);
+    if (!fileName) return null;
+    return {
+      name: fileName,
+      isFolder: false,
+      __shareBasePath: findDashboardPathFromDom()
+    };
+  }
+
+  function matchingShareRowFromDom(node, rows) {
+    if (!node || !Array.isArray(rows) || !rows.length) return null;
+    var textValue = normalizeDomText(node.textContent || "");
+    if (!textValue) return null;
+
+    for (var index = 0; index < rows.length; index += 1) {
+      var row = rows[index];
+      if (!row) continue;
+      var path = String(row.name || row.id || row.fileId || row.path || row.key || "");
+      if (!path) continue;
+      var name = basename(path);
+      if (textValue.indexOf(normalizeDomText(path)) !== -1 || textValue.indexOf(normalizeDomText(name)) !== -1) {
+        return row;
+      }
+    }
+    return null;
+  }
+
+  function bestShareTextCandidate(node) {
+    if (!node) return "";
+    var candidates = [];
+
+    function addCandidate(value) {
+      value = normalizeDomText(value);
+      if (value && looksLikeFileName(value)) candidates.push(value);
+    }
+
+    ["title", "aria-label", "data-name", "data-file", "data-path"].forEach(function (name) {
+      if (node.getAttribute) addCandidate(node.getAttribute(name));
+    });
+
+    if (node.querySelectorAll) {
+      node.querySelectorAll("[title], [aria-label], [data-name], [data-file], [data-path], img[alt]").forEach(function (element) {
+        ["title", "aria-label", "data-name", "data-file", "data-path", "alt"].forEach(function (name) {
+          addCandidate(element.getAttribute(name));
+        });
+      });
+      node.querySelectorAll("*").forEach(function (element) {
+        Array.prototype.forEach.call(element.childNodes || [], function (child) {
+          if (child.nodeType === 3) addCandidate(child.nodeValue);
+        });
+      });
+    }
+
+    Array.prototype.forEach.call(node.childNodes || [], function (child) {
+      if (child.nodeType === 3) addCandidate(child.nodeValue);
+    });
+
+    if (!candidates.length) {
+      (node.textContent || "").split(/\s+/).forEach(addCandidate);
+    }
+
+    candidates.sort(function (a, b) {
+      return b.length - a.length;
+    });
+    return candidates[0] || "";
+  }
+
+  function looksLikeFileName(value) {
+    return /\.[a-z0-9]{2,8}$/i.test(String(value || "").trim());
+  }
+
+  function normalizeDomText(value) {
+    return String(value || "").replace(/\s+/g, " ").trim();
+  }
+
+  function basename(path) {
+    var value = String(path || "").replace(/\\/g, "/").replace(/\/+$/, "");
+    var index = value.lastIndexOf("/");
+    return index === -1 ? value : value.slice(index + 1);
+  }
+
+  function joinSharePath(basePath, fileName) {
+    var base = String(basePath || "").replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/, "");
+    var name = String(fileName || "").replace(/\\/g, "/").replace(/^\/+/, "");
+    return base ? base + "/" + name : name;
+  }
+
+  function collectDomShareTargetOptions(rows) {
     var options = [];
     var root = document.querySelector(".main-container") || document.querySelector(".container") || document;
     var selectedNodes = root.querySelectorAll(
       ".img-card .el-checkbox__input.is-checked, .file-card .el-checkbox__input.is-checked, .content .el-checkbox__input.is-checked, .img-card .el-checkbox.is-checked, .file-card .el-checkbox.is-checked, .content .el-checkbox.is-checked, .list-item .dashboard-checkbox.checked, .list-item .dashboard-checkbox[aria-checked='true']"
     );
     selectedNodes.forEach(function (node) {
-      var item = shareItemFromVueNode(node);
+      var item = shareItemFromVueNode(node) || shareItemFromDomNode(node, rows);
       var target = normalizeShareTargetOption(item);
       if (!target) return;
       target.__preferred = true;
@@ -1222,7 +1336,7 @@
 
     var itemNodes = root.querySelectorAll(".img-card, .file-card, .content > *, .list-item");
     itemNodes.forEach(function (node) {
-      var item = shareItemFromVueNode(node);
+      var item = shareItemFromVueNode(node) || shareItemFromDomNode(node, rows);
       var target = normalizeShareTargetOption(item);
       if (!target) return;
       target.__preferred = false;
@@ -1370,6 +1484,75 @@
     });
   }
 
+  function promptShareExpiryOnly(share) {
+    return new Promise(function (resolve) {
+      var selectedSeconds = suggestedShareExpirySeconds(share);
+      var confirmModal = document.createElement("div");
+      confirmModal.className = "cfib-confirm-modal is-open";
+      confirmModal.innerHTML =
+        '<div class="cfib-confirm-backdrop" data-share-expiry-action="cancel"></div>' +
+        '<section class="cfib-confirm-panel cfib-share-panel" role="dialog" aria-modal="true">' +
+        '<h3 class="cfib-confirm-title">' + escapeHtml(text("editShareExpiry")) + '</h3>' +
+        '<p class="cfib-confirm-message">' + escapeHtml(formatShareTarget(share || {})) + '</p>' +
+        '<label class="cfib-folder-field">' +
+        '<span>' + escapeHtml(text("shareExpires")) + '</span>' +
+        '<select class="cfib-folder-input cfib-share-select" data-share-expiry="true">' +
+        '<option value="3600"' + (selectedSeconds === 3600 ? " selected" : "") + '>' + escapeHtml(text("shareOneHour")) + '</option>' +
+        '<option value="86400"' + (selectedSeconds === 86400 ? " selected" : "") + '>' + escapeHtml(text("shareOneDay")) + '</option>' +
+        '<option value="604800"' + (selectedSeconds === 604800 ? " selected" : "") + '>' + escapeHtml(text("shareSevenDays")) + '</option>' +
+        '<option value="2592000"' + (selectedSeconds === 2592000 ? " selected" : "") + '>' + escapeHtml(text("shareThirtyDays")) + '</option>' +
+        '<option value=""' + (selectedSeconds === null ? " selected" : "") + '>' + escapeHtml(text("sharePermanent")) + '</option>' +
+        '</select>' +
+        '</label>' +
+        '<div class="cfib-confirm-actions">' +
+        '<button type="button" class="cfib-secondary-btn" data-share-expiry-action="cancel">' + escapeHtml(text("cancel")) + '</button>' +
+        '<button type="button" class="cfib-primary-btn" data-share-expiry-action="confirm">' + escapeHtml(text("confirm")) + '</button>' +
+        '</div>' +
+        '</section>';
+
+      function finish(value) {
+        if (confirmModal.parentNode) confirmModal.parentNode.removeChild(confirmModal);
+        resolve(value);
+      }
+
+      confirmModal.addEventListener("click", function (event) {
+        var button = event.target && event.target.closest("[data-share-expiry-action]");
+        if (!button) return;
+        if (button.dataset.shareExpiryAction === "cancel") {
+          finish(false);
+          return;
+        }
+        var input = confirmModal.querySelector("[data-share-expiry]");
+        var value = input ? input.value : "604800";
+        finish({
+          expiresInSeconds: value === "" ? null : Number(value)
+        });
+      });
+
+      confirmModal.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") finish(false);
+        if (event.key === "Enter") {
+          var confirmButton = confirmModal.querySelector('[data-share-expiry-action="confirm"]');
+          if (confirmButton) confirmButton.click();
+        }
+      });
+
+      document.body.appendChild(confirmModal);
+      var select = confirmModal.querySelector("[data-share-expiry]");
+      if (select) select.focus();
+    });
+  }
+
+  function suggestedShareExpirySeconds(share) {
+    if (!share || !share.expiresAt) return null;
+    var seconds = Math.max(1, Math.round((Number(share.expiresAt) - Date.now()) / 1000));
+    var options = [3600, 86400, 604800, 2592000];
+    for (var index = 0; index < options.length; index += 1) {
+      if (seconds <= options[index]) return options[index];
+    }
+    return 2592000;
+  }
+
   function renderCreatedShare(url, share) {
     showModal(text("shareCreated"),
       '<div class="cfib-share-result">' +
@@ -1396,9 +1579,50 @@
     if (input) input.select();
   }
 
+  function readShareUrlCache() {
+    try {
+      return JSON.parse(localStorage.getItem(shareUrlStorageKey) || "{}") || {};
+    } catch (error) {
+      return {};
+    }
+  }
+
+  function writeShareUrlCache(cache) {
+    try {
+      localStorage.setItem(shareUrlStorageKey, JSON.stringify(cache || {}));
+    } catch (error) {
+      // Ignore storage quota or privacy mode failures; the freshly created modal still shows the link.
+    }
+  }
+
+  function rememberShareUrl(share, url) {
+    if (!share || !share.id || !url) return;
+    var cache = readShareUrlCache();
+    cache[share.id] = {
+      url: url,
+      targetType: share.targetType,
+      targetPath: share.targetPath,
+      savedAt: Date.now()
+    };
+    var keys = Object.keys(cache).sort(function (a, b) {
+      return (cache[b].savedAt || 0) - (cache[a].savedAt || 0);
+    });
+    keys.slice(200).forEach(function (key) {
+      delete cache[key];
+    });
+    writeShareUrlCache(cache);
+  }
+
+  function shareUrlFor(share) {
+    if (!share || !share.id) return "";
+    if (share.url) return share.url;
+    var cached = readShareUrlCache()[share.id];
+    return cached && cached.url ? cached.url : "";
+  }
+
   function openShareManager() {
     showModal(text("shareManage"), '<div class="cfib-modal-state">' + escapeHtml(text("loadingShares")) + '</div>');
-    apiJson("/api/manage/share?includeRevoked=true&limit=100")
+    apiJson("/api/manage/share?limit=100")
       .then(function (data) {
         renderShareManager(Array.isArray(data.shares) ? data.shares : []);
       })
@@ -1423,10 +1647,13 @@
         shareById[share.id] = share;
         var status = shareStatusInfo(share);
         var disabled = status.key === "active" ? "" : " disabled";
+        var shareUrl = shareUrlFor(share);
+        var linkDisabled = shareUrl ? "" : " disabled title=\"" + escapeHtml(text("shareUrlUnavailable")) + "\"";
         content += '<div class="cfib-share-row is-' + escapeHtml(status.key) + '">' +
           '<div class="cfib-share-row-main">' +
           '<strong>' + escapeHtml(formatShareTarget(share)) + '</strong>' +
           '<span>' + escapeHtml(text("shareTokenPrefix")) + ': ' + escapeHtml(share.tokenPrefix || "-") + '</span>' +
+          (!shareUrl ? '<span class="cfib-share-url-note">' + escapeHtml(text("shareUrlUnavailable")) + '</span>' : '') +
           '</div>' +
           '<div class="cfib-share-row-meta">' +
           '<span>' + escapeHtml(text("shareStatus")) + ': ' + escapeHtml(status.label) + '</span>' +
@@ -1436,6 +1663,9 @@
           '<span>' + escapeHtml(text("shareLastViewed")) + ': ' + escapeHtml(formatShareDate(share.lastViewedAt)) + '</span>' +
           '</div>' +
           '<div class="cfib-share-row-actions">' +
+          '<button type="button" class="cfib-secondary-btn" data-share-action="copy" data-share-id="' + escapeHtml(share.id) + '"' + linkDisabled + '>' + escapeHtml(text("copy")) + '</button>' +
+          '<button type="button" class="cfib-secondary-btn" data-share-action="open" data-share-id="' + escapeHtml(share.id) + '"' + linkDisabled + '>' + escapeHtml(text("open")) + '</button>' +
+          '<button type="button" class="cfib-secondary-btn" data-share-action="editExpiry" data-share-id="' + escapeHtml(share.id) + '"' + (status.key === "revoked" ? " disabled" : "") + '>' + escapeHtml(text("editShareExpiry")) + '</button>' +
           '<button type="button" class="cfib-danger-btn" data-share-action="revoke" data-share-id="' + escapeHtml(share.id) + '"' + disabled + '>' + escapeHtml(text("revokeShare")) + '</button>' +
           '</div>' +
           '</div>';
@@ -1452,8 +1682,40 @@
           openShareManager();
           return;
         }
-        if (action !== "revoke" || button.disabled) return;
         var share = shareById[button.dataset.shareId];
+        if ((action === "copy" || action === "open") && !button.disabled) {
+          var url = shareUrlFor(share);
+          if (!url) {
+            showToast(text("shareUrlUnavailable"), "error");
+            return;
+          }
+          if (action === "copy") {
+            copyText(url);
+          } else {
+            window.open(url, "_blank", "noreferrer");
+          }
+          return;
+        }
+        if (action === "editExpiry" && !button.disabled) {
+          promptShareExpiryOnly(share).then(function (result) {
+            if (!result) return;
+            button.disabled = true;
+            updateShareExpiryFromManager(button.dataset.shareId, result)
+              .then(function (data) {
+                showToast(text("shareUpdated"), "success");
+                if (data && data.share) {
+                  shareById[data.share.id] = data.share;
+                }
+                openShareManager();
+              })
+              .catch(function (error) {
+                button.disabled = false;
+                showToast(error.message || String(error), "error");
+              });
+          });
+          return;
+        }
+        if (action !== "revoke" || button.disabled) return;
         confirmRevokeShare(share).then(function (confirmed) {
           if (!confirmed) return;
           button.disabled = true;
@@ -1468,6 +1730,19 @@
             });
         });
       });
+    });
+  }
+
+  function updateShareExpiryFromManager(id, result) {
+    var body = {};
+    if (result.expiresInSeconds === null) {
+      body.expiresAt = null;
+    } else {
+      body.expiresInSeconds = result.expiresInSeconds;
+    }
+    return apiJson("/api/manage/share/" + encodeURIComponent(id || ""), {
+      method: "PATCH",
+      body: JSON.stringify(body)
     });
   }
 
@@ -1952,6 +2227,33 @@
     pending = window.requestAnimationFrame(runScheduledRefresh);
   }
 
+  function shouldScheduleRefreshForMutations(mutations) {
+    if (!Array.isArray(mutations)) mutations = Array.prototype.slice.call(mutations || []);
+    return mutations.some(function (mutation) {
+      if (!mutation || mutation.type !== "childList") return false;
+      return mutationNodesNeedRefresh(mutation.addedNodes) || mutationNodesNeedRefresh(mutation.removedNodes);
+    });
+  }
+
+  function mutationNodesNeedRefresh(nodes) {
+    return Array.prototype.some.call(nodes || [], function (node) {
+      if (!node || node.nodeType !== 1) return false;
+      return !isTransientRefreshNode(node);
+    });
+  }
+
+  function isTransientRefreshNode(node) {
+    if (!node || !node.matches) return false;
+    if (node.matches(".cfib-toast-container, .cfib-toast, .el-popper, .el-tooltip__popper, .el-message, .el-image-viewer__wrapper, .el-overlay")) {
+      return true;
+    }
+    if (node.closest(".cfib-toast-container, .el-popper, .el-tooltip__popper, .el-message, .el-image-viewer__wrapper, .el-overlay")) {
+      return true;
+    }
+    var card = node.closest(".img-card, .file-card");
+    return Boolean(card && !node.matches(".img-card, .file-card"));
+  }
+
   ["pushState", "replaceState"].forEach(function (method) {
     var original = history[method];
     history[method] = function () {
@@ -1974,7 +2276,9 @@
     scheduleRefresh();
   });
   var observerRoot = document.getElementById("app") || document.body || document.documentElement;
-  new MutationObserver(scheduleRefresh).observe(observerRoot, { childList: true, subtree: true });
+  new MutationObserver(function (mutations) {
+    if (shouldScheduleRefreshForMutations(mutations)) scheduleRefresh();
+  }).observe(observerRoot, { childList: true, subtree: true });
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", refresh);
   } else {
