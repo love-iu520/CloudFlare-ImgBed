@@ -93,6 +93,7 @@ assert.match(createFolderInCurrentPath, /proxy\.currentPath/, 'new folder should
 const createShareForCurrentTarget = extractFunctionBody(navHotfix, 'createShareForCurrentTarget');
 assert.match(createShareForCurrentTarget, /apiJson\("\/api\/manage\/share"/, 'share action should call the create share API');
 assert.match(createShareForCurrentTarget, /expiresInSeconds/, 'share action should submit expiring share links');
+assert.doesNotMatch(createShareForCurrentTarget, /dashboardUnavailable/, 'share action should not fail just because the dashboard proxy is unavailable');
 const resolveShareTarget = extractFunctionBody(navHotfix, 'resolveShareTarget');
 assert.match(resolveShareTarget, /proxy\.selectedFiles/, 'share target should prefer a selected file or folder');
 assert.match(resolveShareTarget, /proxy\.currentPath/, 'share target should fall back to the current directory');

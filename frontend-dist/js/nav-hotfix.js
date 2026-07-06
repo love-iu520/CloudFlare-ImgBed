@@ -1033,11 +1033,6 @@
 
   function createShareForCurrentTarget() {
     var proxy = findDashboardProxy();
-    if (!proxy) {
-      showToast(text("dashboardUnavailable"), "error");
-      return;
-    }
-
     var target = resolveShareTarget(proxy);
     if (!target) return;
 
@@ -1069,6 +1064,7 @@
   }
 
   function resolveShareTarget(proxy) {
+    proxy = proxy || {};
     var selected = Array.isArray(proxy.selectedFiles) ? proxy.selectedFiles.filter(Boolean) : [];
     if (selected.length > 1) {
       showToast(text("selectOneShareTarget"), "error");
