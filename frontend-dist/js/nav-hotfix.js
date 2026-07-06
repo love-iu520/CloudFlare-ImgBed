@@ -569,13 +569,24 @@
     for (var index = 0; index < nodes.length; index += 1) {
       var instance = nodes[index].__vueParentComponent;
       while (instance) {
-        if (instance.proxy && typeof instance.proxy.refreshFileList === "function" && typeof instance.proxy.fetchFileList === "function") {
+        if (isDashboardProxyCandidate(instance.proxy)) {
           return instance.proxy;
         }
         instance = instance.parent;
       }
     }
     return null;
+  }
+
+  function isDashboardProxyCandidate(proxy) {
+    return Boolean(proxy && (
+      (typeof proxy.refreshFileList === "function" && typeof proxy.fetchFileList === "function") ||
+      (typeof proxy.currentPath === "string" && (
+        Array.isArray(proxy.tableData) ||
+        Array.isArray(proxy.paginatedTableData) ||
+        Array.isArray(proxy.selectedFiles)
+      ))
+    ));
   }
 
   function getSessionValue(key) {
@@ -1109,7 +1120,7 @@
 
     function addTarget(file, preferred) {
       if (!file) return;
-      var target = normalizeShareTargetOption(file);
+      var target = file.targetType ? file : normalizeShareTargetOption(file);
       if (!target) return;
       var key = target.targetType + ":" + target.targetPath;
       if (seen[key]) return;
@@ -1121,6 +1132,7 @@
       }
     }
 
+    var domOptions = collectDomShareTargetOptions();
     var selected = Array.isArray(proxy.selectedFiles) ? proxy.selectedFiles.filter(Boolean) : [];
     selected.forEach(function (file) {
       addTarget(file, true);
@@ -1128,8 +1140,12 @@
 
     addTarget({
       isFolder: true,
-      name: typeof proxy.currentPath === "string" ? proxy.currentPath : ""
-    }, selected.length === 0);
+      name: typeof proxy.currentPath === "string" ? proxy.currentPath : findDashboardPathFromDom()
+    }, selected.length === 0 && !domOptions.some(function (target) { return target.__preferred; }));
+
+    domOptions.forEach(function (target) {
+      addTarget(target, target.__preferred);
+    });
 
     var rows = Array.isArray(proxy.paginatedTableData)
       ? proxy.paginatedTableData
@@ -1154,6 +1170,62 @@
         targetPath: selectedPath
       })
     };
+  }
+
+  function collectDomShareTargetOptions() {
+    var options = [];
+    var selectedNodes = document.querySelectorAll(
+      ".img-card .el-checkbox__input.is-checked, .img-card .el-checkbox.is-checked, .list-item .dashboard-checkbox.checked, .list-item .dashboard-checkbox[aria-checked='true']"
+    );
+    selectedNodes.forEach(function (node) {
+      var target = normalizeShareTargetOption(shareItemFromVueNode(node));
+      if (!target) return;
+      target.__preferred = true;
+      options.push(target);
+    });
+
+    var itemNodes = document.querySelectorAll(".img-card, .list-item");
+    itemNodes.forEach(function (node) {
+      var target = normalizeShareTargetOption(shareItemFromVueNode(node));
+      if (!target) return;
+      target.__preferred = false;
+      options.push(target);
+    });
+
+    return options;
+  }
+
+  function shareItemFromVueNode(node) {
+    var cursor = node;
+    while (cursor) {
+      var item = shareItemFromVueInstance(cursor.__vueParentComponent);
+      if (item) return item;
+      cursor = cursor.parentElement;
+    }
+    return null;
+  }
+
+  function shareItemFromVueInstance(instance) {
+    while (instance) {
+      var proxy = instance.proxy || {};
+      var props = instance.props || {};
+      if (proxy.item) return proxy.item;
+      if (props.item) return props.item;
+      if (typeof proxy.name === "string") return { name: proxy.name, isFolder: true };
+      if (typeof props.name === "string") return { name: props.name, isFolder: true };
+      instance = instance.parent;
+    }
+    return null;
+  }
+
+  function findDashboardPathFromDom() {
+    var parts = [];
+    document.querySelectorAll(".breadcrumb-container .el-breadcrumb__inner").forEach(function (node) {
+      var value = (node.textContent || "").trim();
+      if (!value || value === "/" || value === "根目录" || value === "Root") return;
+      parts.push(value);
+    });
+    return parts.length ? parts.join("/") + "/" : "";
   }
 
   function resolveShareTarget(proxy) {

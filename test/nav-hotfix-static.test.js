@@ -105,6 +105,13 @@ assert.match(resolveShareTarget, /proxy\.currentPath/, 'share target should fall
 const collectShareTargetOptions = extractFunctionBody(navHotfix, 'collectShareTargetOptions');
 assert.match(collectShareTargetOptions, /proxy\.selectedFiles/, 'share target options should include selected files first');
 assert.match(collectShareTargetOptions, /proxy\.paginatedTableData/, 'share target options should include visible dashboard rows');
+assert.match(collectShareTargetOptions, /collectDomShareTargetOptions/, 'share target options should fall back to visible dashboard DOM rows');
+assert.match(collectShareTargetOptions, /findDashboardPathFromDom/, 'share target options should fall back to the breadcrumb path');
+const findDashboardProxy = extractFunctionBody(navHotfix, 'findDashboardProxy');
+assert.match(findDashboardProxy, /isDashboardProxyCandidate/, 'dashboard proxy lookup should accept the real dashboard state shape');
+const collectDomShareTargetOptions = extractFunctionBody(navHotfix, 'collectDomShareTargetOptions');
+assert.match(collectDomShareTargetOptions, /dashboard-checkbox|el-checkbox__input/, 'DOM fallback should inspect checked dashboard controls');
+assert.match(collectDomShareTargetOptions, /shareItemFromVueNode/, 'DOM fallback should read Vue component props instead of display text only');
 const promptShareExpiry = extractFunctionBody(navHotfix, 'promptShareExpiry');
 assert.match(promptShareExpiry, /data-share-target/, 'share creation modal should let the user choose the target');
 const openShareManager = extractFunctionBody(navHotfix, 'openShareManager');

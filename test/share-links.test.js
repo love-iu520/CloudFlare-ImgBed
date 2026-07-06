@@ -160,13 +160,14 @@ describe('share links', () => {
   it('creates, reads, and revokes a file share through API handlers', async () => {
     const env = createEnv();
     await seedFile(env, 'photos/a.jpg');
+    const beforeCreate = Date.now();
 
     const createResponse = await manageShareRequest({
       env,
       request: jsonRequest('https://img.example/api/manage/share', {
         targetType: 'file',
         targetPath: 'photos/a.jpg',
-        expiresInSeconds: 3600,
+        expiresInSeconds: 604800,
       }),
     });
     assert.equal(createResponse.status, 201);
@@ -176,6 +177,8 @@ describe('share links', () => {
     assert.match(created.url, /^https:\/\/img\.example\/share\//);
     assert.equal(created.share.targetType, 'file');
     assert.equal(created.share.targetPath, 'photos/a.jpg');
+    assert.ok(created.share.expiresAt >= beforeCreate + 604799000);
+    assert.ok(created.share.expiresAt <= Date.now() + 604801000);
 
     const token = created.url.split('/share/')[1];
     const publicResponse = await publicShareRequest({

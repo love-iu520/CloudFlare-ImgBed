@@ -215,14 +215,18 @@ export function encodeFileIdForUrl(fileId) {
 
 function normalizeExpiresAt(options, now) {
     if (Object.prototype.hasOwnProperty.call(options, 'expiresAt')) {
-        if (options.expiresAt === null || options.expiresAt === '' || options.expiresAt === undefined) {
+        if (options.expiresAt === null || options.expiresAt === '') {
             return null;
         }
-        const expiresAt = Number(options.expiresAt);
-        if (!Number.isFinite(expiresAt)) {
-            throw new Error('expiresAt must be a timestamp in milliseconds');
+        if (options.expiresAt === undefined) {
+            // Undefined means the API did not set expiresAt; allow expiresInSeconds below.
+        } else {
+            const expiresAt = Number(options.expiresAt);
+            if (!Number.isFinite(expiresAt)) {
+                throw new Error('expiresAt must be a timestamp in milliseconds');
+            }
+            return Math.trunc(expiresAt);
         }
-        return Math.trunc(expiresAt);
     }
 
     if (Object.prototype.hasOwnProperty.call(options, 'expiresInSeconds')) {
