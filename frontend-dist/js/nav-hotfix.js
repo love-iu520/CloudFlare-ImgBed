@@ -191,6 +191,9 @@
   var pendingDashboardMode = "";
   var currentDashboardMode = "";
   var dashboardModeEnforcePending = false;
+  var dashboardProxyCache = { proxy: null, path: "", expiresAt: 0 };
+  var imagePreviewClickToClosePatched = false;
+  var imagePreviewPointer = null;
   var trashModalFiles = [];
   var trashModalSelection = {};
 
@@ -503,20 +506,24 @@
   }
 
   function runFileModeAction(action) {
-    if (action === "newFolder") {
-      createFolderInCurrentPath();
-      return;
-    }
-    if (action === "importTelegram") {
-      importTelegramUpdates();
-      return;
-    }
-    if (action === "share") {
-      createShareForCurrentTarget();
-      return;
-    }
-    if (action === "shareManage") {
-      openShareManager();
+    try {
+      if (action === "newFolder") {
+        createFolderInCurrentPath();
+        return;
+      }
+      if (action === "importTelegram") {
+        importTelegramUpdates();
+        return;
+      }
+      if (action === "share") {
+        createShareForCurrentTarget();
+        return;
+      }
+      if (action === "shareManage") {
+        openShareManager();
+      }
+    } catch (error) {
+      showToast(error && error.message ? error.message : String(error), "error");
     }
   }
 
@@ -565,17 +572,34 @@
   }
 
   function findDashboardProxy() {
-    var nodes = document.querySelectorAll(".container, .main-container, .breadcrumb-container, #app *");
+    var path = normalizedPath();
+    var now = Date.now();
+    if (
+      dashboardProxyCache.proxy &&
+      dashboardProxyCache.path === path &&
+      dashboardProxyCache.expiresAt > now &&
+      isDashboardProxyCandidate(dashboardProxyCache.proxy)
+    ) {
+      return dashboardProxyCache.proxy;
+    }
+
+    var nodes = document.querySelectorAll(".container, .main-container, .breadcrumb-container, .content, .list-view, #app > *");
     for (var index = 0; index < nodes.length; index += 1) {
       var instance = nodes[index].__vueParentComponent;
       while (instance) {
         if (isDashboardProxyCandidate(instance.proxy)) {
+          dashboardProxyCache = { proxy: instance.proxy, path: path, expiresAt: now + 750 };
           return instance.proxy;
         }
         instance = instance.parent;
       }
     }
+    dashboardProxyCache = { proxy: null, path: path, expiresAt: now + 250 };
     return null;
+  }
+
+  function clearDashboardProxyCache() {
+    dashboardProxyCache = { proxy: null, path: "", expiresAt: 0 };
   }
 
   function isDashboardProxyCandidate(proxy) {
@@ -1079,14 +1103,21 @@
   }
 
   function createShareForCurrentTarget() {
-    var proxy = findDashboardProxy();
-    var targetOptions = collectShareTargetOptions(proxy);
-    if (!targetOptions.length) {
-      showToast(text("selectOneShareTarget"), "error");
+    var proxy;
+    var targetOptions;
+    try {
+      proxy = findDashboardProxy();
+      targetOptions = collectShareTargetOptions(proxy);
+      if (!targetOptions.length) {
+        showToast(text("selectOneShareTarget"), "error");
+        return;
+      }
+    } catch (error) {
+      showToast(error && error.message ? error.message : String(error), "error");
       return;
     }
 
-    promptShareExpiry(targetOptions).then(function (result) {
+    return promptShareExpiry(targetOptions).then(function (result) {
       if (!result) return;
 
       var body = {
@@ -1110,6 +1141,8 @@
         .catch(function (error) {
           showToast(error.message || String(error), "error");
         });
+    }).catch(function (error) {
+      showToast(error && error.message ? error.message : String(error), "error");
     });
   }
 
@@ -1174,8 +1207,9 @@
 
   function collectDomShareTargetOptions() {
     var options = [];
-    var selectedNodes = document.querySelectorAll(
-      ".img-card .el-checkbox__input.is-checked, .img-card .el-checkbox.is-checked, .list-item .dashboard-checkbox.checked, .list-item .dashboard-checkbox[aria-checked='true']"
+    var root = document.querySelector(".main-container") || document.querySelector(".container") || document;
+    var selectedNodes = root.querySelectorAll(
+      ".img-card .el-checkbox__input.is-checked, .file-card .el-checkbox__input.is-checked, .content .el-checkbox__input.is-checked, .img-card .el-checkbox.is-checked, .file-card .el-checkbox.is-checked, .content .el-checkbox.is-checked, .list-item .dashboard-checkbox.checked, .list-item .dashboard-checkbox[aria-checked='true']"
     );
     selectedNodes.forEach(function (node) {
       var target = normalizeShareTargetOption(shareItemFromVueNode(node));
@@ -1184,7 +1218,7 @@
       options.push(target);
     });
 
-    var itemNodes = document.querySelectorAll(".img-card, .list-item");
+    var itemNodes = root.querySelectorAll(".img-card, .file-card, .content > *, .list-item");
     itemNodes.forEach(function (node) {
       var target = normalizeShareTargetOption(shareItemFromVueNode(node));
       if (!target) return;
@@ -1321,6 +1355,10 @@
 
       confirmModal.addEventListener("keydown", function (event) {
         if (event.key === "Escape") finish(false);
+        if (event.key === "Enter") {
+          var confirmButton = confirmModal.querySelector('[data-share-action="confirm"]');
+          if (confirmButton) confirmButton.click();
+        }
       });
 
       document.body.appendChild(confirmModal);
@@ -1842,7 +1880,42 @@
     updateAdminActions(nav);
   }
 
+  function patchImagePreviewClickToClose() {
+    if (imagePreviewClickToClosePatched) return;
+    imagePreviewClickToClosePatched = true;
+
+    document.addEventListener("pointerdown", function (event) {
+      var image = event.target && event.target.closest && event.target.closest(".el-image-viewer__img");
+      if (!image || event.button !== 0) {
+        imagePreviewPointer = null;
+        return;
+      }
+      imagePreviewPointer = {
+        x: event.clientX,
+        y: event.clientY,
+        target: image
+      };
+    }, true);
+
+    document.addEventListener("pointerup", function (event) {
+      if (!imagePreviewPointer) return;
+      var image = event.target && event.target.closest && event.target.closest(".el-image-viewer__img");
+      var movement = Math.abs(event.clientX - imagePreviewPointer.x) + Math.abs(event.clientY - imagePreviewPointer.y);
+      var originalTarget = imagePreviewPointer.target;
+      imagePreviewPointer = null;
+      if (!image || image !== originalTarget || movement > 6) return;
+      var wrapper = image.closest(".el-image-viewer__wrapper") || document;
+      var closeButton = wrapper.querySelector(".el-image-viewer__close") || document.querySelector(".el-image-viewer__close");
+      if (closeButton) {
+        closeButton.click();
+        return;
+      }
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    }, true);
+  }
+
   function refresh() {
+    patchImagePreviewClickToClose();
     ensureUploadNav();
     applyPendingDashboardMode();
     flushPendingDashboardRefresh();
@@ -1865,6 +1938,7 @@
     var original = history[method];
     history[method] = function () {
       var result = original.apply(this, arguments);
+      clearDashboardProxyCache();
       scheduleRefresh();
       return result;
     };
@@ -1873,8 +1947,14 @@
   document.addEventListener("click", closeActionMenus);
   window.addEventListener("resize", positionOpenActionMenus);
   window.addEventListener("scroll", positionOpenActionMenus, true);
-  window.addEventListener("popstate", scheduleRefresh);
-  window.addEventListener("storage", scheduleRefresh);
+  window.addEventListener("popstate", function () {
+    clearDashboardProxyCache();
+    scheduleRefresh();
+  });
+  window.addEventListener("storage", function () {
+    clearDashboardProxyCache();
+    scheduleRefresh();
+  });
   new MutationObserver(scheduleRefresh).observe(document.documentElement, { childList: true, subtree: true });
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", refresh);

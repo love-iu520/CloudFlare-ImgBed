@@ -90,12 +90,15 @@ assert.doesNotMatch(importTelegramUpdates, /withDashboardProxy/, 'Telegram impor
 assert.match(importTelegramUpdates, /apiJson\("\/api\/manage\/telegram\/import"/, 'Telegram import should call the import API directly');
 const runFileModeAction = extractFunctionBody(navHotfix, 'runFileModeAction');
 assert.match(runFileModeAction, /openShareManager\(\)/, 'share management action should open the share manager modal');
+assert.match(runFileModeAction, /try\s*\{/, 'file mode actions should guard runtime errors instead of failing silently');
+assert.match(runFileModeAction, /showToast\(/, 'file mode action errors should be visible to the user');
 const createFolderInCurrentPath = extractFunctionBody(navHotfix, 'createFolderInCurrentPath');
 assert.match(createFolderInCurrentPath, /apiJson\("\/api\/manage\/folder"/, 'new folder should call the create folder API');
 assert.match(createFolderInCurrentPath, /proxy\.currentPath/, 'new folder should use the current dashboard path as parent');
 const createShareForCurrentTarget = extractFunctionBody(navHotfix, 'createShareForCurrentTarget');
 assert.match(createShareForCurrentTarget, /apiJson\("\/api\/manage\/share"/, 'share action should call the create share API');
 assert.match(createShareForCurrentTarget, /expiresInSeconds/, 'share action should submit expiring share links');
+assert.match(createShareForCurrentTarget, /\.catch\(/, 'share action should show modal and API failures instead of failing silently');
 assert.doesNotMatch(createShareForCurrentTarget, /dashboardUnavailable/, 'share action should not fail just because the dashboard proxy is unavailable');
 assert.match(createShareForCurrentTarget, /collectShareTargetOptions\(proxy\)/, 'share action should collect selectable file and directory targets');
 assert.match(createShareForCurrentTarget, /result\.target/, 'share action should use the target chosen in the modal');
@@ -109,11 +112,16 @@ assert.match(collectShareTargetOptions, /collectDomShareTargetOptions/, 'share t
 assert.match(collectShareTargetOptions, /findDashboardPathFromDom/, 'share target options should fall back to the breadcrumb path');
 const findDashboardProxy = extractFunctionBody(navHotfix, 'findDashboardProxy');
 assert.match(findDashboardProxy, /isDashboardProxyCandidate/, 'dashboard proxy lookup should accept the real dashboard state shape');
+assert.match(findDashboardProxy, /dashboardProxyCache/, 'dashboard proxy lookup should reuse a short-lived cache to avoid repeated full DOM scans');
+assert.match(findDashboardProxy, /#app > \*/, 'dashboard proxy lookup should avoid scanning every descendant on refresh');
 const collectDomShareTargetOptions = extractFunctionBody(navHotfix, 'collectDomShareTargetOptions');
 assert.match(collectDomShareTargetOptions, /dashboard-checkbox|el-checkbox__input/, 'DOM fallback should inspect checked dashboard controls');
 assert.match(collectDomShareTargetOptions, /shareItemFromVueNode/, 'DOM fallback should read Vue component props instead of display text only');
 const promptShareExpiry = extractFunctionBody(navHotfix, 'promptShareExpiry');
 assert.match(promptShareExpiry, /data-share-target/, 'share creation modal should let the user choose the target');
+assert.match(promptShareExpiry, /data-share-action="confirm"/, 'share creation modal should include a visible confirm button');
+assert.match(promptShareExpiry, /event\.key === "Enter"/, 'share creation modal should allow Enter to confirm the selected expiry');
+assert.match(promptShareExpiry, /604800" selected/, 'share creation modal should default to seven days');
 const openShareManager = extractFunctionBody(navHotfix, 'openShareManager');
 assert.match(openShareManager, /apiJson\("\/api\/manage\/share\?includeRevoked=true&limit=100"/, 'share manager should load the share list API');
 const renderShareManager = extractFunctionBody(navHotfix, 'renderShareManager');
@@ -130,6 +138,13 @@ assert.doesNotMatch(ensureUploadNav, /ensureUploadTools\(host\)/, 'upload page s
 
 const ensureTabsUnifiedLayout = extractFunctionBody(navHotfix, 'ensureTabsUnifiedLayout');
 assert.match(ensureTabsUnifiedLayout, /cfib-header-hotfix/, 'dashboard header should receive a stable layout marker');
+
+const patchImagePreviewClickToClose = extractFunctionBody(navHotfix, 'patchImagePreviewClickToClose');
+assert.match(patchImagePreviewClickToClose, /el-image-viewer__img/, 'image preview patch should watch the Element Plus preview image');
+assert.match(patchImagePreviewClickToClose, /el-image-viewer__close/, 'image preview patch should close through the native viewer close control');
+assert.match(patchImagePreviewClickToClose, /pointerdown/, 'image preview patch should distinguish clicks from drags');
+assert.match(patchImagePreviewClickToClose, /dispatchEvent\(new KeyboardEvent\("keydown"/, 'image preview patch should fall back to Escape when the close button is unavailable');
+assert.match(refresh, /patchImagePreviewClickToClose\(\)/, 'refresh should install the image preview click-to-close patch');
 
 const css = readFileSync(new URL('../frontend-dist/css/nav-hotfix.css', import.meta.url), 'utf8');
 const adminNavRuleMatch = css.match(/\.cfib-tabs-hotfix \.cfib-admin-nav\s*\{[^}]*\}/);
