@@ -1193,6 +1193,7 @@
   }
 
   function normalizeShareTargetOption(file) {
+    if (!file || typeof file !== "object") return null;
     var selectedPath = file.name || file.id || file.fileId || "";
     if (!selectedPath && !file.isFolder) return null;
     return {
@@ -1212,7 +1213,8 @@
       ".img-card .el-checkbox__input.is-checked, .file-card .el-checkbox__input.is-checked, .content .el-checkbox__input.is-checked, .img-card .el-checkbox.is-checked, .file-card .el-checkbox.is-checked, .content .el-checkbox.is-checked, .list-item .dashboard-checkbox.checked, .list-item .dashboard-checkbox[aria-checked='true']"
     );
     selectedNodes.forEach(function (node) {
-      var target = normalizeShareTargetOption(shareItemFromVueNode(node));
+      var item = shareItemFromVueNode(node);
+      var target = normalizeShareTargetOption(item);
       if (!target) return;
       target.__preferred = true;
       options.push(target);
@@ -1220,7 +1222,8 @@
 
     var itemNodes = root.querySelectorAll(".img-card, .file-card, .content > *, .list-item");
     itemNodes.forEach(function (node) {
-      var target = normalizeShareTargetOption(shareItemFromVueNode(node));
+      var item = shareItemFromVueNode(node);
+      var target = normalizeShareTargetOption(item);
       if (!target) return;
       target.__preferred = false;
       options.push(target);
@@ -1926,12 +1929,27 @@
   }
 
   var pending = 0;
+  var pendingRefreshTimer = 0;
+  var lastRefreshAt = 0;
+  var refreshThrottleMs = 80;
+
+  function runScheduledRefresh() {
+    pending = 0;
+    lastRefreshAt = Date.now();
+    refresh();
+  }
+
   function scheduleRefresh() {
-    if (pending) return;
-    pending = window.requestAnimationFrame(function () {
-      pending = 0;
-      refresh();
-    });
+    if (pending || pendingRefreshTimer) return;
+    var delay = Math.max(0, refreshThrottleMs - (Date.now() - lastRefreshAt));
+    if (delay > 0) {
+      pendingRefreshTimer = window.setTimeout(function () {
+        pendingRefreshTimer = 0;
+        pending = window.requestAnimationFrame(runScheduledRefresh);
+      }, delay);
+      return;
+    }
+    pending = window.requestAnimationFrame(runScheduledRefresh);
   }
 
   ["pushState", "replaceState"].forEach(function (method) {
@@ -1955,7 +1973,8 @@
     clearDashboardProxyCache();
     scheduleRefresh();
   });
-  new MutationObserver(scheduleRefresh).observe(document.documentElement, { childList: true, subtree: true });
+  var observerRoot = document.getElementById("app") || document.body || document.documentElement;
+  new MutationObserver(scheduleRefresh).observe(observerRoot, { childList: true, subtree: true });
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", refresh);
   } else {

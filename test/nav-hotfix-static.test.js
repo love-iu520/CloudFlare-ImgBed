@@ -110,6 +110,9 @@ assert.match(collectShareTargetOptions, /proxy\.selectedFiles/, 'share target op
 assert.match(collectShareTargetOptions, /proxy\.paginatedTableData/, 'share target options should include visible dashboard rows');
 assert.match(collectShareTargetOptions, /collectDomShareTargetOptions/, 'share target options should fall back to visible dashboard DOM rows');
 assert.match(collectShareTargetOptions, /findDashboardPathFromDom/, 'share target options should fall back to the breadcrumb path');
+const normalizeShareTargetOption = extractFunctionBody(navHotfix, 'normalizeShareTargetOption');
+assert.match(normalizeShareTargetOption, /!file/, 'share target normalization should ignore nullish items');
+assert.match(normalizeShareTargetOption, /typeof file !== "object"/, 'share target normalization should ignore non-object items');
 const findDashboardProxy = extractFunctionBody(navHotfix, 'findDashboardProxy');
 assert.match(findDashboardProxy, /isDashboardProxyCandidate/, 'dashboard proxy lookup should accept the real dashboard state shape');
 assert.match(findDashboardProxy, /dashboardProxyCache/, 'dashboard proxy lookup should reuse a short-lived cache to avoid repeated full DOM scans');
@@ -117,6 +120,7 @@ assert.match(findDashboardProxy, /#app > \*/, 'dashboard proxy lookup should avo
 const collectDomShareTargetOptions = extractFunctionBody(navHotfix, 'collectDomShareTargetOptions');
 assert.match(collectDomShareTargetOptions, /dashboard-checkbox|el-checkbox__input/, 'DOM fallback should inspect checked dashboard controls');
 assert.match(collectDomShareTargetOptions, /shareItemFromVueNode/, 'DOM fallback should read Vue component props instead of display text only');
+assert.match(collectDomShareTargetOptions, /var item = shareItemFromVueNode\(node\)/, 'DOM fallback should normalize only after reading a guarded item');
 const promptShareExpiry = extractFunctionBody(navHotfix, 'promptShareExpiry');
 assert.match(promptShareExpiry, /data-share-target/, 'share creation modal should let the user choose the target');
 assert.match(promptShareExpiry, /data-share-action="confirm"/, 'share creation modal should include a visible confirm button');
@@ -145,6 +149,10 @@ assert.match(patchImagePreviewClickToClose, /el-image-viewer__close/, 'image pre
 assert.match(patchImagePreviewClickToClose, /pointerdown/, 'image preview patch should distinguish clicks from drags');
 assert.match(patchImagePreviewClickToClose, /dispatchEvent\(new KeyboardEvent\("keydown"/, 'image preview patch should fall back to Escape when the close button is unavailable');
 assert.match(refresh, /patchImagePreviewClickToClose\(\)/, 'refresh should install the image preview click-to-close patch');
+const scheduleRefresh = extractFunctionBody(navHotfix, 'scheduleRefresh');
+assert.match(scheduleRefresh, /refreshThrottleMs/, 'mutation refresh scheduling should be throttled');
+assert.match(scheduleRefresh, /setTimeout/, 'refresh scheduling should defer bursts instead of running every frame');
+assert.match(navHotfix, /document\.getElementById\("app"\) \|\| document\.body/, 'mutation observer should watch the app root before falling back to the whole document');
 
 const css = readFileSync(new URL('../frontend-dist/css/nav-hotfix.css', import.meta.url), 'utf8');
 const adminNavRuleMatch = css.match(/\.cfib-tabs-hotfix \.cfib-admin-nav\s*\{[^}]*\}/);
