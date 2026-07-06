@@ -1216,15 +1216,32 @@
     if (selectedPath && file.__shareBasePath && String(selectedPath).indexOf("/") === -1) {
       selectedPath = joinSharePath(file.__shareBasePath, selectedPath);
     }
-    if (!selectedPath && !file.isFolder) return null;
+    var isDirectory = isShareDirectoryTarget(file, selectedPath);
+    if (!selectedPath && !isDirectory) return null;
     return {
-      targetType: file.isFolder ? "directory" : "file",
+      targetType: isDirectory ? "directory" : "file",
       targetPath: selectedPath,
       label: formatShareTarget({
-        targetType: file.isFolder ? "directory" : "file",
+        targetType: isDirectory ? "directory" : "file",
         targetPath: selectedPath
       })
     };
+  }
+
+  function isShareDirectoryTarget(file, selectedPath) {
+    if (!file || typeof file !== "object") return false;
+    if (file.isFolder || file.isDirectory || file.isDir || file.folder === true || file.directory === true) {
+      return true;
+    }
+    var type = String(file.type || file.kind || file.category || file.fileType || file.FileType || "").toLowerCase();
+    if (type === "folder" || type === "directory" || type === "dir") {
+      return true;
+    }
+    var metadata = file.metadata || {};
+    if (metadata.FolderPlaceholder || metadata.isFolder || metadata.isDirectory) {
+      return true;
+    }
+    return /\/$/.test(String(selectedPath || "").replace(/\\/g, "/"));
   }
 
   function shareItemFromDomNode(node, rows) {
@@ -1389,13 +1406,14 @@
 
     if (selected.length === 1) {
       var file = selected[0];
-      var selectedPath = file.name || file.id || file.fileId || "";
+      var selectedPath = file.name || file.id || file.fileId || file.path || file.key || "";
       if (!selectedPath) {
         showToast(text("selectOneShareTarget"), "error");
         return null;
       }
+      var isDirectory = isShareDirectoryTarget(file, selectedPath);
       return {
-        targetType: file.isFolder ? "directory" : "file",
+        targetType: isDirectory ? "directory" : "file",
         targetPath: selectedPath
       };
     }

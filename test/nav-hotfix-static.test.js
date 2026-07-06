@@ -4,6 +4,12 @@ import { readFileSync } from 'node:fs';
 const navHotfix = readFileSync(new URL('../frontend-dist/js/nav-hotfix.js', import.meta.url), 'utf8');
 
 function extractFunctionBody(source, name) {
+  const functionSource = extractFunctionSource(source, name);
+  const bodyStart = functionSource.indexOf('{');
+  return functionSource.slice(bodyStart + 1, -1);
+}
+
+function extractFunctionSource(source, name) {
   const signature = `function ${name}(`;
   const start = source.indexOf(signature);
   assert.notEqual(start, -1, `${name} should exist`);
@@ -17,11 +23,31 @@ function extractFunctionBody(source, name) {
     if (char === '{') depth += 1;
     if (char === '}') depth -= 1;
     if (depth === 0) {
-      return source.slice(bodyStart + 1, index);
+      return source.slice(start, index + 1);
     }
   }
 
   throw new Error(`${name} body was not closed`);
+}
+
+function maybeExtractFunctionSource(source, name) {
+  return source.includes(`function ${name}(`) ? extractFunctionSource(source, name) : '';
+}
+
+function compileNavFunction(name, dependencies = []) {
+  const dependencySource = dependencies
+    .map(dependency => maybeExtractFunctionSource(navHotfix, dependency))
+    .filter(Boolean)
+    .join('\n');
+  const source = [
+    dependencySource,
+    extractFunctionSource(navHotfix, name),
+    `return ${name};`,
+  ].join('\n');
+  return Function('text', source)(key => ({
+    shareDirectory: '目录',
+    shareFile: '文件',
+  })[key] || key);
 }
 
 const adminActions = extractFunctionBody(navHotfix, 'makeAdminActions');
@@ -113,6 +139,31 @@ assert.match(collectShareTargetOptions, /findDashboardPathFromDom/, 'share targe
 const normalizeShareTargetOption = extractFunctionBody(navHotfix, 'normalizeShareTargetOption');
 assert.match(normalizeShareTargetOption, /!file/, 'share target normalization should ignore nullish items');
 assert.match(normalizeShareTargetOption, /typeof file !== "object"/, 'share target normalization should ignore non-object items');
+const normalizeShareTargetOptionForTest = compileNavFunction('normalizeShareTargetOption', [
+  'isShareDirectoryTarget',
+  'joinSharePath',
+  'formatShareTarget',
+]);
+assert.equal(
+  normalizeShareTargetOptionForTest({ name: '电脑壁纸/', isDir: true }).targetType,
+  'directory',
+  'share target normalization should recognize isDir directory rows'
+);
+assert.equal(
+  normalizeShareTargetOptionForTest({ path: '电脑壁纸', type: 'folder' }).targetType,
+  'directory',
+  'share target normalization should recognize folder typed rows'
+);
+assert.equal(
+  normalizeShareTargetOptionForTest({ name: '电脑壁纸/' }).targetType,
+  'directory',
+  'share target normalization should treat trailing-slash paths as directories'
+);
+assert.equal(
+  normalizeShareTargetOptionForTest({ name: '电脑壁纸/a.jpg' }).targetType,
+  'file',
+  'share target normalization should keep regular files as file shares'
+);
 const findDashboardProxy = extractFunctionBody(navHotfix, 'findDashboardProxy');
 assert.match(findDashboardProxy, /isDashboardProxyCandidate/, 'dashboard proxy lookup should accept the real dashboard state shape');
 assert.match(findDashboardProxy, /dashboardProxyCache/, 'dashboard proxy lookup should reuse a short-lived cache to avoid repeated full DOM scans');
