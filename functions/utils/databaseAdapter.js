@@ -137,6 +137,103 @@ class KVAdapter {
         
         return operations;
     }
+
+    async putShareLink(share) {
+        return await this.put(`manage@share@${share.id}`, JSON.stringify(share));
+    }
+
+    async getShareLinkById(id) {
+        const value = await this.get(`manage@share@${id}`);
+        return value ? JSON.parse(value) : null;
+    }
+
+    async getShareLinkByTokenHash(tokenHash) {
+        let cursor = undefined;
+        while (true) {
+            const result = await this.list({
+                prefix: 'manage@share@',
+                limit: 1000,
+                cursor,
+            });
+
+            for (const item of result.keys || []) {
+                const value = await this.get(item.name);
+                if (!value) continue;
+                const share = JSON.parse(value);
+                if (share.tokenHash === tokenHash) {
+                    return share;
+                }
+            }
+
+            cursor = result.cursor;
+            if (!cursor || result.list_complete) {
+                return null;
+            }
+        }
+    }
+
+    async listShareLinks(options) {
+        options = options || {};
+        const includeRevoked = options.includeRevoked === true;
+        const limit = Math.min(Math.max(parseInt(options.limit, 10) || 100, 1), 1000);
+        const shares = [];
+        let cursor = options.cursor || undefined;
+
+        while (shares.length < limit) {
+            const result = await this.list({
+                prefix: 'manage@share@',
+                limit: 1000,
+                cursor,
+            });
+
+            for (const item of result.keys || []) {
+                const value = await this.get(item.name);
+                if (!value) continue;
+                const share = JSON.parse(value);
+                if (!includeRevoked && share.revokedAt) continue;
+                shares.push(share);
+                if (shares.length >= limit) break;
+            }
+
+            cursor = result.cursor;
+            if (!cursor || result.list_complete || shares.length >= limit) {
+                break;
+            }
+        }
+
+        shares.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+        return {
+            shares,
+            cursor: cursor || null,
+            listComplete: !cursor,
+        };
+    }
+
+    async revokeShareLink(id, revokedAt) {
+        const share = await this.getShareLinkById(id);
+        if (!share) return null;
+        const updated = {
+            ...share,
+            revokedAt,
+            updatedAt: revokedAt,
+        };
+        await this.putShareLink(updated);
+        return updated;
+    }
+
+    async incrementShareView(id, viewedAt) {
+        const share = await this.getShareLinkById(id);
+        if (!share) return null;
+        const updated = {
+            ...share,
+            viewCount: (share.viewCount || 0) + 1,
+            lastViewedAt: viewedAt,
+            updatedAt: viewedAt,
+        };
+        await this.putShareLink(updated);
+        return updated;
+    }
 }
 
 /**

@@ -27,6 +27,22 @@
       trash: "回收站",
       importTelegram: "导入 Telegram",
       newFolder: "新建文件夹",
+      share: "分享",
+      shareTitle: "创建分享链接",
+      shareTarget: "分享目标",
+      shareFile: "文件",
+      shareDirectory: "目录",
+      shareExpires: "有效期",
+      shareOneHour: "1 小时",
+      shareOneDay: "1 天",
+      shareSevenDays: "7 天",
+      shareThirtyDays: "30 天",
+      sharePermanent: "永久",
+      creatingShare: "正在创建分享链接...",
+      shareCreated: "分享链接已创建",
+      shareCopied: "分享链接已复制",
+      copy: "复制",
+      selectOneShareTarget: "请选择一个文件或文件夹，或取消选择以分享当前目录",
       newFolderTitle: "新建文件夹",
       newFolderName: "文件夹名称",
       newFolderPlaceholder: "请输入文件夹名称",
@@ -74,6 +90,22 @@
       trash: "Trash",
       importTelegram: "Import Telegram",
       newFolder: "New Folder",
+      share: "Share",
+      shareTitle: "Create Share Link",
+      shareTarget: "Share target",
+      shareFile: "File",
+      shareDirectory: "Directory",
+      shareExpires: "Expires",
+      shareOneHour: "1 hour",
+      shareOneDay: "1 day",
+      shareSevenDays: "7 days",
+      shareThirtyDays: "30 days",
+      sharePermanent: "Never",
+      creatingShare: "Creating share link...",
+      shareCreated: "Share link created",
+      shareCopied: "Share link copied",
+      copy: "Copy",
+      selectOneShareTarget: "Select one file or folder, or clear selection to share the current directory",
       newFolderTitle: "New Folder",
       newFolderName: "Folder name",
       newFolderPlaceholder: "Enter folder name",
@@ -416,6 +448,7 @@
     wrap.className = "cfib-file-mode-actions";
     var actions = [
       { key: "newFolder", icon: icons.folderPlus, label: "newFolder" },
+      { key: "share", icon: icons.link, label: "share" },
       { key: "importTelegram", icon: icons.telegram, label: "importTelegram" }
     ];
 
@@ -444,6 +477,10 @@
     }
     if (action === "importTelegram") {
       importTelegramUpdates();
+      return;
+    }
+    if (action === "share") {
+      createShareForCurrentTarget();
     }
   }
 
@@ -992,6 +1029,189 @@
           showToast(error.message || String(error), "error");
         });
     });
+  }
+
+  function createShareForCurrentTarget() {
+    var proxy = findDashboardProxy();
+    if (!proxy) {
+      showToast(text("dashboardUnavailable"), "error");
+      return;
+    }
+
+    var target = resolveShareTarget(proxy);
+    if (!target) return;
+
+    promptShareExpiry(target).then(function (expiresInSeconds) {
+      if (expiresInSeconds === false) return;
+
+      var body = {
+        targetType: target.targetType,
+        targetPath: target.targetPath
+      };
+      if (expiresInSeconds === null) {
+        body.expiresAt = null;
+      } else {
+        body.expiresInSeconds = expiresInSeconds;
+      }
+
+      showToast(text("creatingShare"), "loading");
+      apiJson("/api/manage/share", {
+        method: "POST",
+        body: JSON.stringify(body)
+      })
+        .then(function (data) {
+          renderCreatedShare(data.url, data.share);
+        })
+        .catch(function (error) {
+          showToast(error.message || String(error), "error");
+        });
+    });
+  }
+
+  function resolveShareTarget(proxy) {
+    var selected = Array.isArray(proxy.selectedFiles) ? proxy.selectedFiles.filter(Boolean) : [];
+    if (selected.length > 1) {
+      showToast(text("selectOneShareTarget"), "error");
+      return null;
+    }
+
+    if (selected.length === 1) {
+      var file = selected[0];
+      var selectedPath = file.name || file.id || file.fileId || "";
+      if (!selectedPath) {
+        showToast(text("selectOneShareTarget"), "error");
+        return null;
+      }
+      return {
+        targetType: file.isFolder ? "directory" : "file",
+        targetPath: selectedPath
+      };
+    }
+
+    return {
+      targetType: "directory",
+      targetPath: typeof proxy.currentPath === "string" ? proxy.currentPath : ""
+    };
+  }
+
+  function promptShareExpiry(target) {
+    return new Promise(function (resolve) {
+      var confirmModal = document.createElement("div");
+      confirmModal.className = "cfib-confirm-modal is-open";
+      confirmModal.innerHTML =
+        '<div class="cfib-confirm-backdrop" data-share-action="cancel"></div>' +
+        '<section class="cfib-confirm-panel cfib-share-panel" role="dialog" aria-modal="true">' +
+        '<h3 class="cfib-confirm-title">' + escapeHtml(text("shareTitle")) + '</h3>' +
+        '<p class="cfib-confirm-message">' + escapeHtml(text("shareTarget")) + ': ' + escapeHtml(formatShareTarget(target)) + '</p>' +
+        '<label class="cfib-folder-field">' +
+        '<span>' + escapeHtml(text("shareExpires")) + '</span>' +
+        '<select class="cfib-folder-input cfib-share-select" data-share-expiry="true">' +
+        '<option value="3600">' + escapeHtml(text("shareOneHour")) + '</option>' +
+        '<option value="86400">' + escapeHtml(text("shareOneDay")) + '</option>' +
+        '<option value="604800" selected>' + escapeHtml(text("shareSevenDays")) + '</option>' +
+        '<option value="2592000">' + escapeHtml(text("shareThirtyDays")) + '</option>' +
+        '<option value="">' + escapeHtml(text("sharePermanent")) + '</option>' +
+        '</select>' +
+        '</label>' +
+        '<div class="cfib-confirm-actions">' +
+        '<button type="button" class="cfib-secondary-btn" data-share-action="cancel">' + escapeHtml(text("cancel")) + '</button>' +
+        '<button type="button" class="cfib-primary-btn" data-share-action="confirm">' + escapeHtml(text("confirm")) + '</button>' +
+        '</div>' +
+        '</section>';
+
+      function finish(value) {
+        if (confirmModal.parentNode) confirmModal.parentNode.removeChild(confirmModal);
+        resolve(value);
+      }
+
+      confirmModal.addEventListener("click", function (event) {
+        var button = event.target && event.target.closest("[data-share-action]");
+        if (!button) return;
+        if (button.dataset.shareAction === "cancel") {
+          finish(false);
+          return;
+        }
+        var input = confirmModal.querySelector("[data-share-expiry]");
+        var value = input ? input.value : "604800";
+        finish(value === "" ? null : Number(value));
+      });
+
+      confirmModal.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") finish(false);
+      });
+
+      document.body.appendChild(confirmModal);
+      var select = confirmModal.querySelector("[data-share-expiry]");
+      if (select) select.focus();
+    });
+  }
+
+  function renderCreatedShare(url, share) {
+    showModal(text("shareCreated"),
+      '<div class="cfib-share-result">' +
+      '<label class="cfib-folder-field">' +
+      '<span>' + escapeHtml(text("shareCreated")) + '</span>' +
+      '<input class="cfib-folder-input" type="text" readonly value="' + escapeHtml(url || "") + '" data-share-url="true">' +
+      '</label>' +
+      '<div class="cfib-share-meta">' + escapeHtml(formatShareExpiry(share)) + '</div>' +
+      '<div class="cfib-confirm-actions">' +
+      '<button type="button" class="cfib-secondary-btn" data-share-copy="true">' + escapeHtml(text("copy")) + '</button>' +
+      '<a class="cfib-primary-link" href="' + escapeHtml(url || "#") + '" target="_blank" rel="noreferrer">' + escapeHtml(text("open")) + '</a>' +
+      '</div>' +
+      '</div>'
+    );
+
+    var modal = ensureModal();
+    var copyButton = modal.querySelector("[data-share-copy]");
+    if (copyButton) {
+      copyButton.addEventListener("click", function () {
+        copyText(url || "");
+      });
+    }
+    var input = modal.querySelector("[data-share-url]");
+    if (input) input.select();
+  }
+
+  function copyText(value) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(value).then(function () {
+        showToast(text("shareCopied"), "success");
+      }).catch(function () {
+        fallbackCopyText(value);
+      });
+      return;
+    }
+    fallbackCopyText(value);
+  }
+
+  function fallbackCopyText(value) {
+    var textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.setAttribute("readonly", "readonly");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      document.execCommand("copy");
+      showToast(text("shareCopied"), "success");
+    } catch (error) {
+      showToast(value, "info");
+    } finally {
+      textarea.remove();
+    }
+  }
+
+  function formatShareTarget(target) {
+    var prefix = target.targetType === "directory" ? text("shareDirectory") : text("shareFile");
+    return prefix + " " + (target.targetPath || "/");
+  }
+
+  function formatShareExpiry(share) {
+    if (!share || !share.expiresAt) {
+      return text("shareExpires") + ': ' + text("sharePermanent");
+    }
+    return text("shareExpires") + ': ' + new Date(share.expiresAt).toLocaleString();
   }
 
   function promptFolderName() {

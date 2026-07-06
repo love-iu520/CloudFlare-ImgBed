@@ -495,6 +495,8 @@
 }
 
 .cfib-secondary-btn,
+.cfib-primary-btn,
+.cfib-primary-link,
 .cfib-danger-btn,
 .cfib-source-group {
   display: inline-flex;
@@ -512,6 +514,18 @@
   line-height: 1;
   text-decoration: none;
   cursor: pointer;
+}
+
+.cfib-primary-btn,
+.cfib-primary-link {
+  border-color: transparent;
+  background: var(--cfib-nav-accent);
+  color: #fff;
+}
+
+.cfib-primary-btn:hover,
+.cfib-primary-link:hover {
+  filter: brightness(.96);
 }
 
 .cfib-secondary-btn:hover,
@@ -625,6 +639,24 @@
 .cfib-folder-input:focus {
   border-color: var(--cfib-nav-accent);
   box-shadow: 0 0 0 3px rgba(64, 158, 255, .16);
+}
+
+.cfib-share-panel {
+  width: min(460px, calc(100vw - 32px));
+}
+
+.cfib-share-select {
+  cursor: pointer;
+}
+
+.cfib-share-result {
+  display: grid;
+  gap: 12px;
+}
+
+.cfib-share-meta {
+  color: var(--el-text-color-secondary, #64748b);
+  font-size: 13px;
 }
 
 .cfib-import-summary {

@@ -404,5 +404,111 @@ D1Database.prototype.list = function(options) {
     }
 };
 
+// ==================== 分享链接操作 ====================
+
+D1Database.prototype.putShareLink = function(share) {
+    var stmt = this.db.prepare(
+        'INSERT OR REPLACE INTO share_links (' +
+        'id, token_hash, token_prefix, target_type, target_path, expires_at, revoked_at, ' +
+        'created_at_ms, updated_at_ms, view_count, last_viewed_at' +
+        ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    );
+
+    return stmt.bind(
+        share.id,
+        share.tokenHash,
+        share.tokenPrefix,
+        share.targetType,
+        share.targetPath,
+        share.expiresAt,
+        share.revokedAt,
+        share.createdAt,
+        share.updatedAt,
+        share.viewCount || 0,
+        share.lastViewedAt
+    ).run();
+};
+
+D1Database.prototype.getShareLinkById = function(id) {
+    var stmt = this.db.prepare('SELECT * FROM share_links WHERE id = ?');
+    return stmt.bind(id).first().then(rowToShareLink);
+};
+
+D1Database.prototype.getShareLinkByTokenHash = function(tokenHash) {
+    var stmt = this.db.prepare('SELECT * FROM share_links WHERE token_hash = ?');
+    return stmt.bind(tokenHash).first().then(rowToShareLink);
+};
+
+D1Database.prototype.listShareLinks = function(options) {
+    options = options || {};
+    var includeRevoked = options.includeRevoked === true;
+    var limit = Math.min(Math.max(parseInt(options.limit, 10) || 100, 1), 1000);
+    var cursor = options.cursor || null;
+    var query = 'SELECT * FROM share_links';
+    var params = [];
+    var where = [];
+
+    if (!includeRevoked) {
+        where.push('revoked_at IS NULL');
+    }
+    if (cursor) {
+        where.push('created_at_ms < ?');
+        params.push(parseInt(cursor, 10));
+    }
+    if (where.length > 0) {
+        query += ' WHERE ' + where.join(' AND ');
+    }
+    query += ' ORDER BY created_at_ms DESC LIMIT ?';
+    params.push(limit + 1);
+
+    var stmt = this.db.prepare(query);
+    stmt = stmt.bind.apply(stmt, params);
+    return stmt.all().then(function(response) {
+        var rows = response.results || [];
+        var hasMore = rows.length > limit;
+        if (hasMore) {
+            rows.pop();
+        }
+
+        var shares = rows.map(rowToShareLink).filter(Boolean);
+        return {
+            shares: shares,
+            cursor: hasMore && shares.length > 0 ? String(shares[shares.length - 1].createdAt) : null,
+            listComplete: !hasMore
+        };
+    });
+};
+
+D1Database.prototype.revokeShareLink = function(id, revokedAt) {
+    var stmt = this.db.prepare(
+        'UPDATE share_links SET revoked_at = COALESCE(revoked_at, ?), updated_at_ms = ? WHERE id = ?'
+    );
+    return stmt.bind(revokedAt, revokedAt, id).run();
+};
+
+D1Database.prototype.incrementShareView = function(id, viewedAt) {
+    var stmt = this.db.prepare(
+        'UPDATE share_links SET view_count = view_count + 1, last_viewed_at = ?, updated_at_ms = ? WHERE id = ?'
+    );
+    return stmt.bind(viewedAt, viewedAt, id).run();
+};
+
+function rowToShareLink(row) {
+    if (!row) return null;
+    return {
+        id: row.id,
+        tokenHash: row.token_hash,
+        tokenPrefix: row.token_prefix,
+        targetType: row.target_type,
+        targetPath: row.target_path,
+        expiresAt: row.expires_at,
+        revokedAt: row.revoked_at,
+        createdAt: row.created_at_ms,
+        updatedAt: row.updated_at_ms,
+        viewCount: row.view_count || 0,
+        lastViewedAt: row.last_viewed_at,
+    };
+}
+
 // 导出构造函数
 export { D1Database };

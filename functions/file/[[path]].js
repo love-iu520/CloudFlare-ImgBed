@@ -73,7 +73,7 @@ export async function onRequest(context) {  // Contents of context object
     const fileType = imgRecord.metadata?.FileType || null;
 
     // 检查文件可访问状态
-    let accessRes = await returnWithCheck(context, imgRecord);
+    let accessRes = await returnWithCheck(context, imgRecord, fileId);
     if (accessRes.status !== 200) {
         return accessRes; // 如果不可访问，直接返回
     }
@@ -182,6 +182,7 @@ async function buildFileAccessContext(context) {
     const fileAccess = {
         isAdminPreview: fromAdmin,
         adminAuthResult: { authorized: false, authType: null },
+        shareToken: url.searchParams.get('shareToken') || '',
         cacheControl: undefined,
     };
 

@@ -44,6 +44,7 @@ import * as apiManageApiTokens from '../../functions/api/manage/apiTokens.js';
 import * as apiManageFolder from '../../functions/api/manage/folder.js';
 import * as apiManageList from '../../functions/api/manage/list.js';
 import * as apiManageQuota from '../../functions/api/manage/quota.js';
+import * as apiManageShare_index from '../../functions/api/manage/share/index.js';
 import * as apiManageSourceGroups from '../../functions/api/manage/source-groups.js';
 import * as apiPublicList from '../../functions/api/public/list.js';
 import * as uploadHuggingfaceCommitUpload from '../../functions/upload/huggingface/commitUpload.js';
@@ -61,10 +62,13 @@ import * as apiManageDeleteCatchAll from '../../functions/api/manage/delete/[[pa
 import * as apiManageMetadataCatchAll from '../../functions/api/manage/metadata/[[path]].js';
 import * as apiManageMoveCatchAll from '../../functions/api/manage/move/[[path]].js';
 import * as apiManageRenameCatchAll from '../../functions/api/manage/rename/[[path]].js';
+import * as apiManageShareCatchAll from '../../functions/api/manage/share/[[path]].js';
 import * as apiManageTagsCatchAll from '../../functions/api/manage/tags/[[path]].js';
 import * as apiManageWhiteCatchAll from '../../functions/api/manage/white/[[path]].js';
+import * as apiShareCatchAll from '../../functions/api/share/[[path]].js';
 import * as davCatchAll from '../../functions/dav/[[path]].js';
 import * as fileCatchAll from '../../functions/file/[[path]].js';
+import * as shareCatchAll from '../../functions/share/[[path]].js';
 
 
 // ==================== 自动生成的路由表 ====================
@@ -98,6 +102,7 @@ const routes = [
     { path: '/api/manage/folder', module: apiManageFolder, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/list', module: apiManageList, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/quota', module: apiManageQuota, middlewares: [mw_api, mw_api_manage] },
+    { path: '/api/manage/share', module: apiManageShare_index, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/manage/source-groups', module: apiManageSourceGroups, middlewares: [mw_api, mw_api_manage] },
     { path: '/api/public/list', module: apiPublicList, middlewares: [mw_api] },
     { path: '/upload/huggingface/commitUpload', module: uploadHuggingfaceCommitUpload, middlewares: [mw_upload] },
@@ -115,10 +120,13 @@ const routes = [
     { path: '/api/manage/metadata/', module: apiManageMetadataCatchAll, middlewares: [mw_api, mw_api_manage], catchAll: true },
     { path: '/api/manage/move/', module: apiManageMoveCatchAll, middlewares: [mw_api, mw_api_manage], catchAll: true },
     { path: '/api/manage/rename/', module: apiManageRenameCatchAll, middlewares: [mw_api, mw_api_manage], catchAll: true },
+    { path: '/api/manage/share/', module: apiManageShareCatchAll, middlewares: [mw_api, mw_api_manage], catchAll: true },
     { path: '/api/manage/tags/', module: apiManageTagsCatchAll, middlewares: [mw_api, mw_api_manage], catchAll: true },
     { path: '/api/manage/white/', module: apiManageWhiteCatchAll, middlewares: [mw_api, mw_api_manage], catchAll: true },
+    { path: '/api/share/', module: apiShareCatchAll, middlewares: [mw_api], catchAll: true },
     { path: '/dav/', module: davCatchAll, middlewares: [mw_dav], catchAll: true },
     { path: '/file/', module: fileCatchAll, middlewares: [mw_file], catchAll: true },
+    { path: '/share/', module: shareCatchAll, middlewares: [], catchAll: true },
 ];
 
 

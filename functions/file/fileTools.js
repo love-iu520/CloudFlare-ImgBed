@@ -1,5 +1,7 @@
 /* ======== 文件读取工具函数 ======== */
 
+import { validateShareTokenForFile } from '../utils/share/shareLinks.js';
+
 // 判断请求域名是否在允许的域名列表中
 export function isDomainAllowed(context) {
     const { Referer, securityConfig, url } = context;
@@ -125,11 +127,12 @@ export function isTgChannel(imgRecord) {
 }
 
 // 图片可访问性检查
-export async function returnWithCheck(context, imgRecord) {
+export async function returnWithCheck(context, imgRecord, fileId = '') {
     const { url, securityConfig } = context;
     const whiteListMode = securityConfig.access.whiteListMode;
     const isAdminPreview = context.fileAccess?.isAdminPreview === true;
     const adminAuthorized = context.fileAccess?.adminAuthResult?.authorized === true;
+    const shareToken = context.fileAccess?.shareToken || '';
     const response = new Response('success', { status: 200 });
 
     if (isAdminPreview && !adminAuthorized) {
@@ -143,6 +146,15 @@ export async function returnWithCheck(context, imgRecord) {
     }
 
     if (isAdminPreview) {
+        context.fileAccess.cacheControl = FILE_CACHE_CONTROL.PRIVATE;
+        return response;
+    }
+
+    if (shareToken) {
+        const shareAccess = await validateShareTokenForFile(context.env, shareToken, fileId, record.metadata);
+        if (!shareAccess.valid) {
+            return shareAccessDeniedResponse(shareAccess.reason);
+        }
         context.fileAccess.cacheControl = FILE_CACHE_CONTROL.PRIVATE;
         return response;
     }
@@ -162,6 +174,22 @@ export async function returnWithCheck(context, imgRecord) {
     }
 
     return response;
+}
+
+function shareAccessDeniedResponse(reason) {
+    const status = reason === 'expired' || reason === 'revoked'
+        ? 410
+        : reason === 'not-found'
+            ? 404
+            : 403;
+
+    return new Response('Share link is not allowed to access this file', {
+        status,
+        headers: {
+            'Content-Type': 'text/plain;charset=UTF-8',
+            'Cache-Control': FILE_CACHE_CONTROL.NO_STORE,
+        },
+    });
 }
 
 function unauthorizedAdminPreviewResponse() {
