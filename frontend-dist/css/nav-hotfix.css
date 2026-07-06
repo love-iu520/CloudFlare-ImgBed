@@ -659,6 +659,59 @@
   font-size: 13px;
 }
 
+.cfib-share-list {
+  display: grid;
+  gap: 10px;
+}
+
+.cfib-share-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, .28);
+  border-radius: 8px;
+  background: var(--el-fill-color-blank, #fff);
+}
+
+.cfib-share-row-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cfib-share-row-main strong,
+.cfib-share-row-main span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cfib-share-row-main span,
+.cfib-share-row-meta {
+  color: var(--el-text-color-secondary, #64748b);
+  font-size: 12px;
+}
+
+.cfib-share-row-meta {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.cfib-share-row-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.cfib-share-row.is-expired,
+.cfib-share-row.is-revoked {
+  opacity: .72;
+}
+
 .cfib-import-summary {
   display: flex;
   flex-wrap: wrap;
@@ -853,6 +906,14 @@ html.dark .cfib-file-row {
 
   .cfib-trash-file-row .cfib-file-actions {
     grid-column: 1 / -1;
+  }
+
+  .cfib-share-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cfib-share-row-actions {
+    justify-content: flex-start;
   }
 
   .cfib-trash-toolbar {

@@ -28,6 +28,7 @@
       importTelegram: "导入 Telegram",
       newFolder: "新建文件夹",
       share: "分享",
+      shareManage: "分享管理",
       shareTitle: "创建分享链接",
       shareTarget: "分享目标",
       shareFile: "文件",
@@ -41,6 +42,20 @@
       creatingShare: "正在创建分享链接...",
       shareCreated: "分享链接已创建",
       shareCopied: "分享链接已复制",
+      loadingShares: "正在加载分享链接...",
+      shareNoLinks: "暂无分享链接",
+      shareStatus: "状态",
+      shareStatusActive: "有效",
+      shareStatusExpired: "已过期",
+      shareStatusRevoked: "已撤销",
+      shareCreatedAt: "创建时间",
+      shareLastViewed: "最后访问",
+      shareViews: "访问",
+      shareTokenPrefix: "Token 前缀",
+      revokeShare: "撤销",
+      revokeShareTitle: "撤销分享链接？",
+      revokeShareTip: "撤销后该分享链接将不可访问",
+      shareRevoked: "分享链接已撤销",
       copy: "复制",
       selectOneShareTarget: "请选择一个文件或文件夹，或取消选择以分享当前目录",
       newFolderTitle: "新建文件夹",
@@ -91,6 +106,7 @@
       importTelegram: "Import Telegram",
       newFolder: "New Folder",
       share: "Share",
+      shareManage: "Share Manager",
       shareTitle: "Create Share Link",
       shareTarget: "Share target",
       shareFile: "File",
@@ -104,6 +120,20 @@
       creatingShare: "Creating share link...",
       shareCreated: "Share link created",
       shareCopied: "Share link copied",
+      loadingShares: "Loading share links...",
+      shareNoLinks: "No share links",
+      shareStatus: "Status",
+      shareStatusActive: "Active",
+      shareStatusExpired: "Expired",
+      shareStatusRevoked: "Revoked",
+      shareCreatedAt: "Created",
+      shareLastViewed: "Last viewed",
+      shareViews: "Views",
+      shareTokenPrefix: "Token prefix",
+      revokeShare: "Revoke",
+      revokeShareTitle: "Revoke share link?",
+      revokeShareTip: "This share link will stop working after it is revoked",
+      shareRevoked: "Share link revoked",
       copy: "Copy",
       selectOneShareTarget: "Select one file or folder, or clear selection to share the current directory",
       newFolderTitle: "New Folder",
@@ -144,6 +174,7 @@
     upload: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="m7.5 8.5 4.5-4.5 4.5 4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 15v3.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
     more: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.7" fill="currentColor"/><circle cx="12" cy="12" r="1.7" fill="currentColor"/><circle cx="19" cy="12" r="1.7" fill="currentColor"/></svg>',
     link: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.1 0l1.4-1.4a5 5 0 0 0-7.1-7.1L10.5 5.4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M14 11a5 5 0 0 0-7.1 0l-1.4 1.4a5 5 0 0 0 7.1 7.1l.9-.9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    list: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="4" cy="6" r="1.4" fill="currentColor"/><circle cx="4" cy="12" r="1.4" fill="currentColor"/><circle cx="4" cy="18" r="1.4" fill="currentColor"/></svg>',
     logout: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M16 17l5-5-5-5M21 12H9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     trash: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M7 6l1 15h8l1-15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     telegram: '<svg class="cfib-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 4 3.7 10.8c-1 .4-.9 1.9.2 2.1l4.5.9 1.7 5.1c.3.9 1.5 1.1 2.1.3l2.5-3.2 4.2 3.1c.8.6 2 .1 2.2-.9L23 5.5c.2-1-.9-1.8-2-1.5Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="m8.5 13.8 7.1-5.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
@@ -449,6 +480,7 @@
     var actions = [
       { key: "newFolder", icon: icons.folderPlus, label: "newFolder" },
       { key: "share", icon: icons.link, label: "share" },
+      { key: "shareManage", icon: icons.list, label: "shareManage" },
       { key: "importTelegram", icon: icons.telegram, label: "importTelegram" }
     ];
 
@@ -481,6 +513,10 @@
     }
     if (action === "share") {
       createShareForCurrentTarget();
+      return;
+    }
+    if (action === "shareManage") {
+      openShareManager();
     }
   }
 
@@ -1033,20 +1069,23 @@
 
   function createShareForCurrentTarget() {
     var proxy = findDashboardProxy();
-    var target = resolveShareTarget(proxy);
-    if (!target) return;
+    var targetOptions = collectShareTargetOptions(proxy);
+    if (!targetOptions.length) {
+      showToast(text("selectOneShareTarget"), "error");
+      return;
+    }
 
-    promptShareExpiry(target).then(function (expiresInSeconds) {
-      if (expiresInSeconds === false) return;
+    promptShareExpiry(targetOptions).then(function (result) {
+      if (!result) return;
 
       var body = {
-        targetType: target.targetType,
-        targetPath: target.targetPath
+        targetType: result.target.targetType,
+        targetPath: result.target.targetPath
       };
-      if (expiresInSeconds === null) {
+      if (result.expiresInSeconds === null) {
         body.expiresAt = null;
       } else {
-        body.expiresInSeconds = expiresInSeconds;
+        body.expiresInSeconds = result.expiresInSeconds;
       }
 
       showToast(text("creatingShare"), "loading");
@@ -1061,6 +1100,60 @@
           showToast(error.message || String(error), "error");
         });
     });
+  }
+
+  function collectShareTargetOptions(proxy) {
+    proxy = proxy || {};
+    var options = [];
+    var seen = {};
+
+    function addTarget(file, preferred) {
+      if (!file) return;
+      var target = normalizeShareTargetOption(file);
+      if (!target) return;
+      var key = target.targetType + ":" + target.targetPath;
+      if (seen[key]) return;
+      seen[key] = true;
+      if (preferred) {
+        options.unshift(target);
+      } else {
+        options.push(target);
+      }
+    }
+
+    var selected = Array.isArray(proxy.selectedFiles) ? proxy.selectedFiles.filter(Boolean) : [];
+    selected.forEach(function (file) {
+      addTarget(file, true);
+    });
+
+    addTarget({
+      isFolder: true,
+      name: typeof proxy.currentPath === "string" ? proxy.currentPath : ""
+    }, selected.length === 0);
+
+    var rows = Array.isArray(proxy.paginatedTableData)
+      ? proxy.paginatedTableData
+      : Array.isArray(proxy.tableData)
+        ? proxy.tableData
+        : [];
+    rows.forEach(function (file) {
+      addTarget(file, false);
+    });
+
+    return options;
+  }
+
+  function normalizeShareTargetOption(file) {
+    var selectedPath = file.name || file.id || file.fileId || "";
+    if (!selectedPath && !file.isFolder) return null;
+    return {
+      targetType: file.isFolder ? "directory" : "file",
+      targetPath: selectedPath,
+      label: formatShareTarget({
+        targetType: file.isFolder ? "directory" : "file",
+        targetPath: selectedPath
+      })
+    };
   }
 
   function resolveShareTarget(proxy) {
@@ -1090,15 +1183,28 @@
     };
   }
 
-  function promptShareExpiry(target) {
+  function promptShareExpiry(targetOptions) {
     return new Promise(function (resolve) {
+      var options = Array.isArray(targetOptions) && targetOptions.length ? targetOptions : [{
+        targetType: "directory",
+        targetPath: "",
+        label: formatShareTarget({ targetType: "directory", targetPath: "" })
+      }];
+      var targetOptionsHtml = options.map(function (target, index) {
+        return '<option value="' + index + '">' + escapeHtml(target.label || formatShareTarget(target)) + '</option>';
+      }).join("");
       var confirmModal = document.createElement("div");
       confirmModal.className = "cfib-confirm-modal is-open";
       confirmModal.innerHTML =
         '<div class="cfib-confirm-backdrop" data-share-action="cancel"></div>' +
         '<section class="cfib-confirm-panel cfib-share-panel" role="dialog" aria-modal="true">' +
         '<h3 class="cfib-confirm-title">' + escapeHtml(text("shareTitle")) + '</h3>' +
-        '<p class="cfib-confirm-message">' + escapeHtml(text("shareTarget")) + ': ' + escapeHtml(formatShareTarget(target)) + '</p>' +
+        '<label class="cfib-folder-field">' +
+        '<span>' + escapeHtml(text("shareTarget")) + '</span>' +
+        '<select class="cfib-folder-input cfib-share-select" data-share-target="true">' +
+        targetOptionsHtml +
+        '</select>' +
+        '</label>' +
         '<label class="cfib-folder-field">' +
         '<span>' + escapeHtml(text("shareExpires")) + '</span>' +
         '<select class="cfib-folder-input cfib-share-select" data-share-expiry="true">' +
@@ -1127,9 +1233,18 @@
           finish(false);
           return;
         }
+        var targetInput = confirmModal.querySelector("[data-share-target]");
+        var targetIndex = targetInput ? Number(targetInput.value) : 0;
+        var target = options[Number.isFinite(targetIndex) ? targetIndex : 0] || options[0];
         var input = confirmModal.querySelector("[data-share-expiry]");
         var value = input ? input.value : "604800";
-        finish(value === "" ? null : Number(value));
+        finish({
+          target: {
+            targetType: target.targetType,
+            targetPath: target.targetPath
+          },
+          expiresInSeconds: value === "" ? null : Number(value)
+        });
       });
 
       confirmModal.addEventListener("keydown", function (event) {
@@ -1137,7 +1252,7 @@
       });
 
       document.body.appendChild(confirmModal);
-      var select = confirmModal.querySelector("[data-share-expiry]");
+      var select = confirmModal.querySelector("[data-share-target]");
       if (select) select.focus();
     });
   }
@@ -1166,6 +1281,124 @@
     }
     var input = modal.querySelector("[data-share-url]");
     if (input) input.select();
+  }
+
+  function openShareManager() {
+    showModal(text("shareManage"), '<div class="cfib-modal-state">' + escapeHtml(text("loadingShares")) + '</div>');
+    apiJson("/api/manage/share?includeRevoked=true&limit=100")
+      .then(function (data) {
+        renderShareManager(Array.isArray(data.shares) ? data.shares : []);
+      })
+      .catch(function (error) {
+        showModal(text("shareManage"), '<div class="cfib-modal-error">' + escapeHtml(error.message || String(error)) + '</div>');
+      });
+  }
+
+  function renderShareManager(shares) {
+    var shareList = Array.isArray(shares) ? shares : [];
+    var shareById = {};
+    var content = '<div class="cfib-modal-toolbar">' +
+      '<button type="button" class="cfib-secondary-btn" data-share-action="refresh">' + escapeHtml(text("refresh")) + '</button>' +
+      '</div>';
+
+    if (!shareList.length) {
+      content += '<div class="cfib-modal-state">' + escapeHtml(text("shareNoLinks")) + '</div>';
+    } else {
+      content += '<div class="cfib-share-list">';
+      shareList.forEach(function (share) {
+        if (!share || !share.id) return;
+        shareById[share.id] = share;
+        var status = shareStatusInfo(share);
+        var disabled = status.key === "active" ? "" : " disabled";
+        content += '<div class="cfib-share-row is-' + escapeHtml(status.key) + '">' +
+          '<div class="cfib-share-row-main">' +
+          '<strong>' + escapeHtml(formatShareTarget(share)) + '</strong>' +
+          '<span>' + escapeHtml(text("shareTokenPrefix")) + ': ' + escapeHtml(share.tokenPrefix || "-") + '</span>' +
+          '</div>' +
+          '<div class="cfib-share-row-meta">' +
+          '<span>' + escapeHtml(text("shareStatus")) + ': ' + escapeHtml(status.label) + '</span>' +
+          '<span>' + escapeHtml(formatShareExpiry(share)) + '</span>' +
+          '<span>' + escapeHtml(text("shareCreatedAt")) + ': ' + escapeHtml(formatShareDate(share.createdAt)) + '</span>' +
+          '<span>' + escapeHtml(text("shareViews")) + ': ' + escapeHtml(share.viewCount || 0) + '</span>' +
+          '<span>' + escapeHtml(text("shareLastViewed")) + ': ' + escapeHtml(formatShareDate(share.lastViewedAt)) + '</span>' +
+          '</div>' +
+          '<div class="cfib-share-row-actions">' +
+          '<button type="button" class="cfib-danger-btn" data-share-action="revoke" data-share-id="' + escapeHtml(share.id) + '"' + disabled + '>' + escapeHtml(text("revokeShare")) + '</button>' +
+          '</div>' +
+          '</div>';
+      });
+      content += '</div>';
+    }
+
+    showModal(text("shareManage"), content);
+    var modal = ensureModal();
+    modal.querySelectorAll("[data-share-action]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        var action = button.dataset.shareAction;
+        if (action === "refresh") {
+          openShareManager();
+          return;
+        }
+        if (action !== "revoke" || button.disabled) return;
+        var share = shareById[button.dataset.shareId];
+        confirmRevokeShare(share).then(function (confirmed) {
+          if (!confirmed) return;
+          button.disabled = true;
+          revokeShareFromManager(button.dataset.shareId)
+            .then(function () {
+              showToast(text("shareRevoked"), "success");
+              openShareManager();
+            })
+            .catch(function (error) {
+              button.disabled = false;
+              showToast(error.message || String(error), "error");
+            });
+        });
+      });
+    });
+  }
+
+  function revokeShareFromManager(id) {
+    return apiJson("/api/manage/share/" + encodeURIComponent(id || ""), {
+      method: "DELETE"
+    });
+  }
+
+  function confirmRevokeShare(share) {
+    return new Promise(function (resolve) {
+      var confirmModal = document.createElement("div");
+      confirmModal.className = "cfib-confirm-modal is-open";
+      confirmModal.innerHTML =
+        '<div class="cfib-confirm-backdrop" data-revoke-action="cancel"></div>' +
+        '<section class="cfib-confirm-panel" role="dialog" aria-modal="true">' +
+        '<h3 class="cfib-confirm-title">' + escapeHtml(text("revokeShareTitle")) + '</h3>' +
+        '<p class="cfib-confirm-message">' + escapeHtml(formatShareTarget(share || {})) + '</p>' +
+        '<p class="cfib-confirm-note">' + escapeHtml(text("revokeShareTip")) + '</p>' +
+        '<div class="cfib-confirm-actions">' +
+        '<button type="button" class="cfib-secondary-btn" data-revoke-action="cancel">' + escapeHtml(text("cancel")) + '</button>' +
+        '<button type="button" class="cfib-danger-btn" data-revoke-action="confirm">' + escapeHtml(text("revokeShare")) + '</button>' +
+        '</div>' +
+        '</section>';
+
+      function finish(value) {
+        if (confirmModal.parentNode) confirmModal.parentNode.removeChild(confirmModal);
+        resolve(value);
+      }
+
+      confirmModal.addEventListener("click", function (event) {
+        var button = event.target && event.target.closest("[data-revoke-action]");
+        if (!button) return;
+        finish(button.dataset.revokeAction === "confirm");
+      });
+
+      confirmModal.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") finish(false);
+      });
+
+      document.body.appendChild(confirmModal);
+      var confirmButton = confirmModal.querySelector('[data-revoke-action="confirm"]');
+      if (confirmButton) confirmButton.focus();
+    });
   }
 
   function copyText(value) {
@@ -1208,6 +1441,23 @@
       return text("shareExpires") + ': ' + text("sharePermanent");
     }
     return text("shareExpires") + ': ' + new Date(share.expiresAt).toLocaleString();
+  }
+
+  function shareStatusInfo(share) {
+    if (share && share.revokedAt) {
+      return { key: "revoked", label: text("shareStatusRevoked") };
+    }
+    if (share && share.expiresAt && Date.now() > Number(share.expiresAt)) {
+      return { key: "expired", label: text("shareStatusExpired") };
+    }
+    return { key: "active", label: text("shareStatusActive") };
+  }
+
+  function formatShareDate(value) {
+    if (!value) return "-";
+    var date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "-";
+    return date.toLocaleString();
   }
 
   function promptFolderName() {

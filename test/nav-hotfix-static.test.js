@@ -34,6 +34,7 @@ const fileModeActions = extractFunctionBody(navHotfix, 'makeFileModeActions');
 assert.match(fileModeActions, /cfib-file-mode-actions/, 'file management tool actions should be rendered in the dashboard area');
 assert.match(fileModeActions, /key: "newFolder"/, 'dashboard tool actions should include new folder');
 assert.match(fileModeActions, /key: "share"/, 'dashboard tool actions should include share');
+assert.match(fileModeActions, /key: "shareManage"/, 'dashboard tool actions should include share management');
 assert.match(fileModeActions, /key: "importTelegram"/, 'dashboard tool actions should include Telegram import');
 assert.doesNotMatch(fileModeActions, /key: "restoreTrash"/, 'dashboard tool actions should not include the unused trash restore shortcut');
 assert.doesNotMatch(fileModeActions, /sourceGroups/, 'dashboard tool actions should not include Telegram source groups');
@@ -87,6 +88,8 @@ assert.match(patchDashboardModeRefresh, /currentDashboardMode === "trash"/, 'wra
 const importTelegramUpdates = extractFunctionBody(navHotfix, 'importTelegramUpdates');
 assert.doesNotMatch(importTelegramUpdates, /withDashboardProxy/, 'Telegram import should not wait for the dashboard proxy');
 assert.match(importTelegramUpdates, /apiJson\("\/api\/manage\/telegram\/import"/, 'Telegram import should call the import API directly');
+const runFileModeAction = extractFunctionBody(navHotfix, 'runFileModeAction');
+assert.match(runFileModeAction, /openShareManager\(\)/, 'share management action should open the share manager modal');
 const createFolderInCurrentPath = extractFunctionBody(navHotfix, 'createFolderInCurrentPath');
 assert.match(createFolderInCurrentPath, /apiJson\("\/api\/manage\/folder"/, 'new folder should call the create folder API');
 assert.match(createFolderInCurrentPath, /proxy\.currentPath/, 'new folder should use the current dashboard path as parent');
@@ -94,9 +97,22 @@ const createShareForCurrentTarget = extractFunctionBody(navHotfix, 'createShareF
 assert.match(createShareForCurrentTarget, /apiJson\("\/api\/manage\/share"/, 'share action should call the create share API');
 assert.match(createShareForCurrentTarget, /expiresInSeconds/, 'share action should submit expiring share links');
 assert.doesNotMatch(createShareForCurrentTarget, /dashboardUnavailable/, 'share action should not fail just because the dashboard proxy is unavailable');
+assert.match(createShareForCurrentTarget, /collectShareTargetOptions\(proxy\)/, 'share action should collect selectable file and directory targets');
+assert.match(createShareForCurrentTarget, /result\.target/, 'share action should use the target chosen in the modal');
 const resolveShareTarget = extractFunctionBody(navHotfix, 'resolveShareTarget');
 assert.match(resolveShareTarget, /proxy\.selectedFiles/, 'share target should prefer a selected file or folder');
 assert.match(resolveShareTarget, /proxy\.currentPath/, 'share target should fall back to the current directory');
+const collectShareTargetOptions = extractFunctionBody(navHotfix, 'collectShareTargetOptions');
+assert.match(collectShareTargetOptions, /proxy\.selectedFiles/, 'share target options should include selected files first');
+assert.match(collectShareTargetOptions, /proxy\.paginatedTableData/, 'share target options should include visible dashboard rows');
+const promptShareExpiry = extractFunctionBody(navHotfix, 'promptShareExpiry');
+assert.match(promptShareExpiry, /data-share-target/, 'share creation modal should let the user choose the target');
+const openShareManager = extractFunctionBody(navHotfix, 'openShareManager');
+assert.match(openShareManager, /apiJson\("\/api\/manage\/share\?includeRevoked=true&limit=100"/, 'share manager should load the share list API');
+const renderShareManager = extractFunctionBody(navHotfix, 'renderShareManager');
+assert.match(renderShareManager, /data-share-action="revoke"/, 'share manager rows should expose revoke actions');
+const revokeShareFromManager = extractFunctionBody(navHotfix, 'revokeShareFromManager');
+assert.match(revokeShareFromManager, /method: "DELETE"/, 'share manager should revoke shares through the API');
 assert.doesNotMatch(navHotfix, /window\.confirm/, 'trash permanent delete should not use browser confirm dialogs');
 
 const ensureUploadNav = extractFunctionBody(navHotfix, 'ensureUploadNav');
@@ -134,5 +150,7 @@ assert.match(css, /\.cfib-confirm-modal/, 'permanent delete should have an in-ap
 assert.match(css, /\.cfib-folder-input/, 'new folder modal should have input styles');
 assert.match(css, /\.cfib-share-result/, 'share result modal should have styles');
 assert.match(css, /\.cfib-primary-link/, 'share result should style the open link as a primary action');
+assert.match(css, /\.cfib-share-list/, 'share manager should have list layout styles');
+assert.match(css, /\.cfib-share-row/, 'share manager should have row layout styles');
 assert.doesNotMatch(css, /quick-toolbar\[data-v-060c1790\]\s*\{[^}]*opacity:\s*0/, 'upload page quick toolbar should not be hidden by the nav hotfix');
 assert.doesNotMatch(css, /\.cfib-upload-home-hotfix \.more-dropdown\.desktop-only/, 'upload page native More dropdown should not be hidden by the nav hotfix');
