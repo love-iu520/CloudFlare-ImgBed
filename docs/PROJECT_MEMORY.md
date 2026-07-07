@@ -17,6 +17,9 @@
 - 2026-07-07：分享链接升级为 `share_links` + `share_link_items` 两层模型；新建分享可以用 `targets` 数组让一个 token 包含多个文件和目录。
 - 2026-07-07：本机已下载前端源码仓库 `D:\Dev\Projects\Practice\Sanyue-ImgHub`；导航热修复已迁移到该仓库 `public/js/nav-hotfix.js` 和 `public/css/nav-hotfix.css`，由前端 build 带入 `dist`。
 - 当前 `package.json` 版本为 `2.7.4`；仓库中已存在 `database/migrations/v2.7.5_add_share_links.sql`，不要仅凭 package 版本判断迁移是否不存在。
+- 2026-07-07：新增 `functions/utils/logger.js` 作为脱敏日志工具；上传和第三方存储路径应优先使用 logger，默认 warn/error，避免直接输出 token、签名 URL、完整第三方 API 响应或 SHA256/OID。
+- 2026-07-07：新增 `database/migrations/README.md` 和 `docs/FRONTEND_DIST_SYNC.md`，分别记录数据库迁移规则和前端产物同步 checklist。
+- 2026-07-07：新增 `npm run test:routes`，会重新生成 Worker 路由并运行 `test/worker-routes-static.test.js`。
 - `frontend-dist` 从 README 的 v2.7.1 公告开始是 Cloudflare Pages 构建输出目录。
 
 ## 维护注意事项
@@ -24,6 +27,7 @@
 - 每轮修改前先看 `git status --short --branch`，本项目可能存在运行时或热修复相关未提交改动。
 - `deploy/worker/index.js` 是生成文件；新增或移动 `functions/` 路由后运行 `node deploy\worker\generate-routes.js`。
 - `deploy/worker/generate-routes.js` 会跳过 `functions/utils`，并只把导出 `onRequest` 的 JS 文件纳入路由。
+- `npm run test:routes` 会执行 `node deploy/worker/generate-routes.js`，如果路由源文件有变化，运行后要检查 `deploy/worker/index.js` diff 是否符合预期。
 - `deploy/server/index.js` 在 Docker/Node.js 模式下动态导入 Functions 文件，并在 Windows 上使用 `pathToFileURL`；改动动态 import 时注意 Windows 路径。
 - `data` 是本地数据库和 R2 模拟数据目录，`.wrangler` 是 Wrangler 状态目录，二者都不应作为项目事实提交。
 - `npm start` 和 `npm run start:docker` 都默认占用 `8080` 端口；启动服务后要在最终回复说明地址和服务状态。
@@ -37,6 +41,7 @@
 - 上传路径必须经过 `sanitizeUploadFolder`，不要重新引入 `..`、反斜杠或未规范化路径。
 - 支持的上传渠道包括 Telegram、Cloudflare R2、S3、Discord、Hugging Face、WebDAV 和 External。
 - Telegram 渠道会写入 `SourceGroup`，相关逻辑在 `functions/utils/sourceGroup.js`，测试在 `test/metadata-helpers.test.js`。
+- 调试日志不要直接使用 `console.log` 打印完整配置、响应体或上传 URL；使用 `functions/utils/logger.js`，并优先记录状态码、流程阶段、文件大小、是否存在配置等摘要信息。
 - 分享链接要同时检查 token 状态、目标范围和文件元数据状态；Block、Trash、adult 文件不能因为分享 token 而被公开绕过。
 - 分享管理新记录会保存完整 token，并在管理员列表接口返回 `/share/<token>` URL，便于跨浏览器复制历史链接；旧记录如果没有保存 token，仍只能依赖本浏览器缓存或重新创建。
 - 多目标分享中的目录 item 使用动态目录前缀，不做创建时快照；目录新增文件后，只要文件元数据可访问，就会出现在分享内。
@@ -68,6 +73,7 @@
 
 - 文档-only 修改：`git diff --check` 足够。
 - 常规测试：`npm test`。
+- Worker 路由静态检查：`npm run test:routes`。
 - 分享链接：`npx mocha test\share-links.test.js`。
 - 元数据辅助：`npx mocha test\metadata-helpers.test.js`。
 - 导航热修复：`npx mocha test\nav-hotfix-static.test.js`。

@@ -1,3 +1,7 @@
+import { createLogger, redactForLog } from '../logger.js';
+
+const logger = createLogger('storage:discord');
+
 /**
  * Discord API 封装类
  * 用于上传文件到 Discord 频道并获取文件
@@ -35,7 +39,12 @@ export class DiscordAPI {
             body: formData
         });
 
-        console.log('Discord API response:', response.status, response.statusText);
+        logger.info('sendFile response', {
+            status: response.status,
+            statusText: response.statusText,
+            channelId,
+            fileSize: file?.size,
+        });
 
         if (!response.ok) {
             const errorData = await response.json().catch(() => ({}));
@@ -54,7 +63,7 @@ export class DiscordAPI {
     getFileInfo(responseData) {
         try {
             if (!responseData || !responseData.id) {
-                console.error('Invalid Discord response:', responseData);
+                logger.warn('Invalid Discord response', summarizeDiscordMessage(responseData));
                 return null;
             }
 
@@ -74,7 +83,7 @@ export class DiscordAPI {
 
             return null;
         } catch (error) {
-            console.error('Error parsing Discord response:', error.message);
+            logger.warn('Error parsing Discord response', error);
             return null;
         }
     }
@@ -98,7 +107,11 @@ export class DiscordAPI {
                 if (response.status === 429) {
                     const retryAfter = response.headers.get('Retry-After');
                     const waitTime = retryAfter ? parseFloat(retryAfter) * 1000 : 1000 * (attempt + 1);
-                    console.warn(`Discord 429 rate limit, waiting ${waitTime}ms before retry ${attempt + 1}/${maxRetries}`);
+                    logger.warn('Discord 429 rate limit', {
+                        waitTime,
+                        attempt: attempt + 1,
+                        maxRetries,
+                    });
                     
                     if (attempt < maxRetries) {
                         await new Promise(resolve => setTimeout(resolve, waitTime));
@@ -107,14 +120,17 @@ export class DiscordAPI {
                 }
 
                 if (!response.ok) {
-                    console.error('Discord getMessage error:', response.status, response.statusText);
+                    logger.warn('Discord getMessage error', {
+                        status: response.status,
+                        statusText: response.statusText,
+                    });
                     return null;
                 }
 
                 const messageData = await response.json();
                 return messageData;
             } catch (error) {
-                console.error('Error getting Discord message:', error.message);
+                logger.warn('Error getting Discord message', error);
                 if (attempt < maxRetries) {
                     await new Promise(resolve => setTimeout(resolve, 500 * (attempt + 1)));
                     continue;
@@ -176,11 +192,26 @@ export class DiscordAPI {
                 return true;
             }
 
-            console.error('Discord deleteMessage error:', response.status, response.statusText);
+            logger.warn('Discord deleteMessage error', {
+                status: response.status,
+                statusText: response.statusText,
+            });
             return false;
         } catch (error) {
-            console.error('Error deleting Discord message:', error.message);
+            logger.warn('Error deleting Discord message', error);
             return false;
         }
     }
+}
+
+function summarizeDiscordMessage(responseData) {
+    if (!responseData || typeof responseData !== 'object') {
+        return redactForLog(responseData);
+    }
+
+    return {
+        hasId: Boolean(responseData.id),
+        attachmentCount: Array.isArray(responseData.attachments) ? responseData.attachments.length : 0,
+        type: responseData.type,
+    };
 }

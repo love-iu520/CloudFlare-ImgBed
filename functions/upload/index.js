@@ -14,7 +14,9 @@ import { WebDAVAPI } from "../utils/storage/webdavAPI";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getDatabase } from '../utils/databaseAdapter.js';
 import { buildTelegramSourceGroup } from '../utils/sourceGroup.js';
+import { createLogger } from '../utils/logger.js';
 
+const logger = createLogger('upload');
 
 export async function onRequest(context) {  // Contents of context object
     const { request, env, params, waitUntil, next, data } = context;
@@ -152,7 +154,7 @@ async function processFileUpload(context, formdata = null) {
             const headerBuffer = await file.slice(0, 65536).arrayBuffer();
             imageDimensions = getImageDimensions(headerBuffer, fileType);
         } catch (error) {
-            console.error('Error reading image dimensions:', error);
+            logger.warn('Error reading image dimensions', error);
         }
     }
 
@@ -549,7 +551,7 @@ async function uploadFileToTelegram(context, fullId, metadata, fileExt, fileName
         waitUntil(endUpload(context, fullId, metadata));
 
     } catch (error) {
-        console.log('Telegram upload error:', error.message);
+        logger.warn('Telegram upload error', error);
         res = createResponse('upload error, check your environment params about telegram channel!', { status: 400 });
     } finally {
         return res;
@@ -667,7 +669,7 @@ async function uploadFileToDiscord(context, fullId, metadata, returnLink) {
         return buildUploadResponse(context, returnLink);
 
     } catch (error) {
-        console.error('Discord upload error:', error.message);
+        logger.warn('Discord upload error', error);
         return createResponse(`Error: Discord upload failed - ${error.message}`, { status: 500 });
     }
 }
@@ -678,20 +680,20 @@ async function uploadFileToHuggingFace(context, fullId, metadata, returnLink) {
     const { env, waitUntil, uploadConfig, formdata, specifiedChannelName } = context;
     const db = getDatabase(env);
 
-    console.log('=== HuggingFace Upload Start ===');
+    logger.info('HuggingFace upload start');
 
     // 获取 HuggingFace 渠道配置
     const hfSettings = uploadConfig.huggingface;
-    console.log('HuggingFace settings:', hfSettings ? 'found' : 'not found');
+    logger.info('HuggingFace settings resolved', { configured: Boolean(hfSettings) });
 
     if (!hfSettings || !hfSettings.channels || hfSettings.channels.length === 0) {
-        console.log('Error: No HuggingFace channel configured');
+        logger.warn('No HuggingFace channel configured');
         return createResponse('Error: No HuggingFace channel configured', { status: 400 });
     }
 
     // 选择渠道：优先使用指定的渠道名称
     const hfChannels = hfSettings.channels;
-    console.log('HuggingFace channels count:', hfChannels.length);
+    logger.info('HuggingFace channels available', { count: hfChannels.length });
 
     let hfChannel;
     if (specifiedChannelName) {
@@ -703,10 +705,13 @@ async function uploadFileToHuggingFace(context, fullId, metadata, returnLink) {
             : hfChannels[0];
     }
 
-    console.log('Selected channel:', hfChannel?.name, 'repo:', hfChannel?.repo);
+    logger.info('Selected HuggingFace channel', {
+        channelName: hfChannel?.name,
+        repo: hfChannel?.repo,
+    });
 
     if (!hfChannel || !hfChannel.token || !hfChannel.repo) {
-        console.log('Error: HuggingFace channel not properly configured', {
+        logger.warn('HuggingFace channel not properly configured', {
             hasChannel: !!hfChannel,
             hasToken: !!hfChannel?.token,
             hasRepo: !!hfChannel?.repo
@@ -718,7 +723,11 @@ async function uploadFileToHuggingFace(context, fullId, metadata, returnLink) {
     const fileName = metadata.FileName;
     // 获取前端预计算的 SHA256（如果有）
     const precomputedSha256 = formdata.get('sha256') || null;
-    console.log('File to upload:', fileName, 'size:', file?.size, 'precomputed SHA256:', precomputedSha256 ? 'yes' : 'no');
+    logger.info('HuggingFace file selected', {
+        fileName,
+        size: file?.size,
+        hasPrecomputedSha256: Boolean(precomputedSha256),
+    });
 
     // 生成唯一标识符前缀（UUID格式），加在文件名前面
     const uniquePrefix = crypto.randomUUID();
@@ -726,15 +735,18 @@ async function uploadFileToHuggingFace(context, fullId, metadata, returnLink) {
     const hfFilePath = lastSlashIndex === -1 
         ? `${uniquePrefix}_${fullId}` 
         : `${fullId.substring(0, lastSlashIndex + 1)}${uniquePrefix}_${fullId.substring(lastSlashIndex + 1)}`;
-    console.log('HuggingFace file path:', hfFilePath);
+    logger.debug('HuggingFace file path resolved', { hfFilePath });
 
     const huggingfaceAPI = new HuggingFaceAPI(hfChannel.token, hfChannel.repo, hfChannel.isPrivate || false);
 
     try {
         // 上传文件到 HuggingFace（传入预计算的 SHA256）
-        console.log('Starting HuggingFace upload...');
+        logger.info('Starting HuggingFace upload');
         const result = await huggingfaceAPI.uploadFile(file, hfFilePath, `Upload ${fileName}`, precomputedSha256);
-        console.log('HuggingFace upload result:', result);
+        logger.info('HuggingFace upload finished', {
+            success: result?.success,
+            fileSize: result?.fileSize,
+        });
 
         if (!result.success) {
             throw new Error('Failed to upload file to HuggingFace');
@@ -781,7 +793,7 @@ async function uploadFileToHuggingFace(context, fullId, metadata, returnLink) {
         return buildUploadResponse(context, returnLink);
 
     } catch (error) {
-        console.error('HuggingFace upload error:', error.message);
+        logger.error('HuggingFace upload error', error);
         return createResponse(`Error: HuggingFace upload failed - ${error.message}`, { status: 500 });
     }
 }
@@ -855,7 +867,7 @@ async function uploadFileToWebDAV(context, fullId, metadata, returnLink) {
 
         return buildUploadResponse(context, returnLink);
     } catch (error) {
-        console.error('WebDAV upload error:', error.message);
+        logger.warn('WebDAV upload error', error);
         return createResponse(`Error: WebDAV upload failed - ${error.message}`, { status: 500 });
     }
 }

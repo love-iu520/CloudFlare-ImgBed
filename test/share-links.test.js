@@ -407,6 +407,52 @@ describe('share links', () => {
     assert.equal(outsideDirectory.reason, 'outside-scope');
   });
 
+  it('omits inaccessible files from public collection and directory share responses', async () => {
+    const env = createEnv();
+    await seedFile(env, 'photos/visible.jpg');
+    await seedFile(env, 'photos/blocked.jpg', { ListType: 'Block' });
+    await seedFile(env, 'photos/adult.jpg', { Label: 'adult' });
+    await seedFile(env, 'photos/trash.jpg', { ListType: 'Trash' });
+    await seedFile(env, 'photos/dir/visible.jpg');
+    await seedFile(env, 'photos/dir/blocked.jpg', { ListType: 'Block' });
+    await rebuildIndex({ env, waitUntil });
+
+    const collection = await createShareLink(env, {
+      targets: [
+        { targetType: 'file', targetPath: 'photos/visible.jpg' },
+        { targetType: 'file', targetPath: 'photos/blocked.jpg' },
+        { targetType: 'file', targetPath: 'photos/adult.jpg' },
+        { targetType: 'file', targetPath: 'photos/trash.jpg' },
+      ],
+      expiresAt: Date.now() + 60_000,
+    });
+
+    const collectionResponse = await publicShareRequest({
+      env,
+      request: new Request(`https://img.example/api/share/${collection.token}`),
+      params: { path: collection.token },
+    });
+    assert.equal(collectionResponse.status, 200);
+    const collectionBody = await collectionResponse.json();
+    assert.deepEqual(collectionBody.files.map(file => file.name), ['photos/visible.jpg']);
+
+    const directory = await createShareLink(env, {
+      targetType: 'directory',
+      targetPath: 'photos/dir',
+      expiresAt: Date.now() + 60_000,
+    });
+
+    const directoryResponse = await publicShareRequest({
+      env,
+      waitUntil,
+      request: new Request(`https://img.example/api/share/${directory.token}`),
+      params: { path: directory.token },
+    });
+    assert.equal(directoryResponse.status, 200);
+    const directoryBody = await directoryResponse.json();
+    assert.deepEqual(directoryBody.files.map(file => file.name), ['photos/dir/visible.jpg']);
+  });
+
   it('lists shared directory children with relative paths for navigation', async () => {
     const env = createEnv();
     await seedFile(env, 'photos/root.jpg');
@@ -485,6 +531,7 @@ describe('share links', () => {
       metadata: { ListType: 'None' },
     }, 'photos/a.jpg');
     assert.equal(allowed.status, 200);
+    assert.equal(context.fileAccess.cacheControl, 'private, max-age=86400');
 
     const outsideScope = await returnWithCheck(context, {
       metadata: { ListType: 'None' },
@@ -495,6 +542,7 @@ describe('share links', () => {
       metadata: { ListType: 'Block' },
     }, 'photos/a.jpg');
     assert.equal(blocked.status, 403);
+    assert.equal(blocked.headers.get('Cache-Control'), 'private, no-store, max-age=0');
   });
 
   it('stores share links in the D1 share_links table', async function () {

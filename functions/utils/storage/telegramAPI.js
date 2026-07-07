@@ -1,3 +1,7 @@
+import { createLogger } from '../logger.js';
+
+const logger = createLogger('storage:telegram');
+
 /**
  * Telegram API 封装类
  */
@@ -40,7 +44,12 @@ export class TelegramAPI {
             headers: this.defaultHeaders,
             body: formData
         });
-        console.log('Telegram API response:', response.status, response.statusText);
+        logger.info('sendFile response', {
+            status: response.status,
+            statusText: response.statusText,
+            functionName,
+            fileSize: file?.size,
+        });
         if (!response.ok) {
             throw new Error(`Telegram API error: ${response.statusText}`);
         }
@@ -66,7 +75,9 @@ export class TelegramAPI {
 
         try {
             if (!responseData.ok) {
-                console.error('Telegram API error:', responseData.description);
+                logger.warn('Telegram API returned an error', {
+                    description: responseData.description,
+                });
                 return null;
             }
 
@@ -91,7 +102,7 @@ export class TelegramAPI {
 
             return null;
         } catch (error) {
-            console.error('Error parsing Telegram response:', error.message);
+            logger.warn('Error parsing Telegram response', error);
             return null;
         }
     }
@@ -116,7 +127,7 @@ export class TelegramAPI {
                 return null;
             }
         } catch (error) {
-            console.error('Error getting file path:', error.message);
+            logger.warn('Error getting Telegram file path', error);
             return null;
         }
     }

@@ -36,7 +36,9 @@
 - `deploy/server`：Docker/Node.js 运行时适配层，包含 Hono 服务、SQLite D1 模拟和本地 R2 模拟。
 - `deploy/worker`：Workers 部署适配层、路由生成脚本和 wrangler 配置生成脚本。
 - `database`：D1/SQLite 初始化 SQL 和迁移脚本。
-- `test`：Mocha 测试，目前覆盖元数据辅助、分享链接和导航热修复静态检查。
+- `database/migrations/README.md`：数据库迁移编号、运行时兼容和新增迁移 checklist。
+- `test`：Mocha 测试，目前覆盖元数据辅助、分享链接、日志脱敏、Worker 路由静态检查和导航热修复静态检查。
+- `docs/FRONTEND_DIST_SYNC.md`：前端源码构建并同步到 `frontend-dist` 的维护 checklist。
 - `readme`：README 引用的图片资源。
 - `data`：本地运行数据目录，被 `.gitignore` 忽略。
 - `.wrangler`：Wrangler 本地状态目录，被 `.gitignore` 忽略。
@@ -87,11 +89,13 @@
 - D1 适配层会在写入或读取分享 item 时确保 `share_link_items` 表存在；KV 模式把 item 列表内嵌在 `manage@share@<id>` 分享记录中。
 - 本地 Docker/Node.js 模式使用 `data/database.sqlite` 和 `data/r2`，这些属于运行数据，不应提交。
 - 存储渠道客户端位于 `functions/utils/storage`。
+- 运行日志统一优先使用 `functions/utils/logger.js`，默认只输出 warn/error，并对 token、Authorization、cookie、签名 URL、SHA256/OID 等敏感字段做脱敏；上传和第三方存储调试不要直接打印完整配置、第三方 API 响应体或签名上传地址。
 
 ## 部署与自动化
 
 - Cloudflare Pages 用户需把构建输出目录配置为 `frontend-dist`。
 - 前端源码修改后，应先在 `Sanyue-ImgHub` 构建并检查 `dist`，再同步到本仓库 `frontend-dist` 用于 Pages、Workers 或 Docker/Node.js 部署。
+- 前端产物同步流程记录在 `docs/FRONTEND_DIST_SYNC.md`；修改 `frontend-dist` 中 JS/CSS 时需要确认对应 `.gz` 文件同步。
 - Worker 配置模板在 `deploy/worker/wrangler.toml`，GitHub Actions 可通过 Secrets 运行 `deploy/worker/generate-toml.js` 动态生成配置。
 - `.github/workflows/deploy-worker.yml` 只在 fork 仓库且配置 Cloudflare Secrets 时部署 Worker。
 - `.github/workflows/docker-publish.yml` 仅在原仓库 `MarSeventh/CloudFlare-ImgBed` 构建并推送 Docker 镜像。
@@ -113,6 +117,7 @@
 - `.gitignore` 忽略 `data`、`.wrangler`、SQLite 文件、`node_modules` 和若干本地 IDE/Agent 目录。
 - 数据库配置可使用 KV `img_url` 或 D1 `img_d1`；修改适配层时要同时确认 Pages、Workers 和 Docker/SQLite 三种运行模式。
 - `deploy/worker/generate-toml.js` 会从环境变量读取 Cloudflare binding 信息，并对输出日志中的敏感字段做脱敏；不要在文档或日志中打印真实凭据。
+- 业务代码日志也应通过 `functions/utils/logger.js` 输出；不要用 `console.log` 直接打印 token、cookie、Authorization、渠道完整配置、签名 URL、Hugging Face LFS batch/preupload 完整响应或第三方 API 完整响应体。
 - 管理端 API 默认应返回 `private, no-store, max-age=0`，不要让管理数据被公开缓存。
 - 分享链接应校验过期、撤销、目标路径范围和文件元数据状态，不能绕过 Block、Trash 或 adult 限制；管理接口可返回完整分享 URL，公开接口不应泄露管理数据。
 - Telegram、Discord、Hugging Face、S3、WebDAV 等渠道配置包含敏感凭据，读取和调试时只输出脱敏摘要。
@@ -121,6 +126,7 @@
 
 - 文档-only 修改：`git diff --check`。
 - 常规工具或 API 修改：`npm test`。
+- Worker 路由静态检查：`npm run test:routes`。
 - 分享链接修改：`npx mocha test\share-links.test.js`。
 - 元数据、来源组、回收站、文件夹占位符修改：`npx mocha test\metadata-helpers.test.js`。
 - 导航热修复修改：`npx mocha test\nav-hotfix-static.test.js`。
