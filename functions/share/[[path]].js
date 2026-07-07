@@ -82,6 +82,7 @@ function renderSharePage(token) {
     const content = document.getElementById("content");
     const expires = document.getElementById("expires");
     const initialDir = normalizeRelativeDir(new URLSearchParams(window.location.search).get("dir") || "");
+    const initialItem = new URLSearchParams(window.location.search).get("item") || "";
 
     function escapeText(value) {
       return String(value == null ? "" : value).replace(/[&<>"']/g, char => ({
@@ -120,14 +121,22 @@ function renderSharePage(token) {
       return index === -1 ? "" : value.slice(0, index + 1);
     }
 
-    function sharePageHref(relativeDir) {
+    function sharePageHref(relativeDir, itemId) {
       const value = normalizeRelativeDir(relativeDir);
-      return window.location.pathname + (value ? "?dir=" + encodeURIComponent(value) : "");
+      const params = new URLSearchParams();
+      if (itemId) params.set("item", itemId);
+      if (value) params.set("dir", value);
+      const query = params.toString();
+      return window.location.pathname + (query ? "?" + query : "");
     }
 
-    function shareApiHref(relativeDir) {
+    function shareApiHref(relativeDir, itemId) {
       const value = normalizeRelativeDir(relativeDir);
-      return "/api/share/" + encodedToken + (value ? "?dir=" + encodeURIComponent(value) : "");
+      const params = new URLSearchParams();
+      if (itemId) params.set("item", itemId);
+      if (value) params.set("dir", value);
+      const query = params.toString();
+      return "/api/share/" + encodedToken + (query ? "?" + query : "");
     }
 
     function basename(path) {
@@ -153,26 +162,28 @@ function renderSharePage(token) {
 
     function renderDirectory(directory) {
       const relativePath = normalizeRelativeDir(directory.relativePath || directory.path || "");
+      const itemId = directory.itemId || "";
       return '<div class="row">' +
         '<div><div class="name">' + escapeText(directory.name || directory.path) + '</div>' +
         '<div class="meta">文件夹</div></div>' +
         '<div class="row-actions">' +
-        '<a class="button" href="' + escapeText(sharePageHref(relativePath)) + '">打开</a>' +
+        '<a class="button" href="' + escapeText(sharePageHref(relativePath, itemId)) + '">打开</a>' +
         '</div>' +
       '</div>';
     }
 
-    function renderParentDirectory(relativeDir) {
-      if (!relativeDir) return "";
+    function renderParentDirectory(relativeDir, itemId) {
+      if (!relativeDir && !itemId) return "";
+      const target = relativeDir ? sharePageHref(parentRelativePath(relativeDir), itemId) : sharePageHref("", "");
       return '<div class="row">' +
         '<div><div class="name">..</div><div class="meta">上级文件夹</div></div>' +
         '<div class="row-actions">' +
-        '<a class="button secondary" href="' + escapeText(sharePageHref(parentRelativePath(relativeDir))) + '">返回</a>' +
+        '<a class="button secondary" href="' + escapeText(target) + '">返回</a>' +
         '</div>' +
       '</div>';
     }
 
-    fetch(shareApiHref(initialDir))
+    fetch(shareApiHref(initialDir, initialItem))
       .then(async response => {
         const body = await response.json().catch(() => ({}));
         if (!response.ok || !body.success) {
@@ -193,9 +204,10 @@ function renderSharePage(token) {
         }
 
         const currentDir = data.directory ? normalizeRelativeDir(data.directory.relativePath) : initialDir;
+        const currentItem = data.directory ? data.directory.itemId || "" : initialItem;
         const directories = (data.directories || []).map(renderDirectory);
         const files = (data.files || []).map(renderFile);
-        const rows = [renderParentDirectory(currentDir)].concat(directories, files).join("");
+        const rows = [renderParentDirectory(currentDir, currentItem)].concat(directories, files).join("");
         content.innerHTML = rows || '<div class="state">这个分享目录暂无文件。</div>';
       })
       .catch(error => {

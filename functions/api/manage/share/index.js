@@ -5,7 +5,7 @@ import {
     listShareLinks,
     normalizeDirectoryPath,
     normalizeFilePath,
-    normalizeShareTarget,
+    normalizeShareTargets,
     revokeShareLink,
     updateShareExpiry,
 } from '../../../utils/share/shareLinks.js';
@@ -58,14 +58,15 @@ export async function onRequest(context) {
 async function createShare(context) {
     const { request, env } = context;
     const body = await parseJsonBody(request);
-    const requestedTarget = normalizeShareTarget(body.targetType, body.targetPath);
+    const requestedTargets = normalizeShareTargets(body);
     const url = new URL(request.url);
 
-    const target = await assertShareTargetAllowed(env, requestedTarget);
+    const targets = normalizeShareTargets(await resolveShareTargets(env, requestedTargets));
 
     const result = await createShareLink(env, {
-        targetType: target.targetType,
-        targetPath: target.targetPath,
+        targetType: targets[0].targetType,
+        targetPath: targets[0].targetPath,
+        targets,
         expiresAt: body.expiresAt,
         expiresInSeconds: body.expiresInSeconds,
         shareOrigin: url.origin,
@@ -143,6 +144,14 @@ export async function revokeShare(env, id) {
         success: true,
         share,
     });
+}
+
+async function resolveShareTargets(env, targets) {
+    const resolved = [];
+    for (const target of targets) {
+        resolved.push(await assertShareTargetAllowed(env, target));
+    }
+    return resolved;
 }
 
 async function assertShareTargetAllowed(env, target) {

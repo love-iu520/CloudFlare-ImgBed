@@ -68,16 +68,20 @@
 
 - 管理端 API 位于 `functions/api/manage`，覆盖文件列表、删除、移动、重命名、白名单/黑名单、回收站恢复、标签、批量索引、系统配置、来源组、Telegram 导入和分享管理。
 - 分享管理 API 支持创建、列表、撤销和更新有效期；新分享记录保存完整 token 以便管理员复制历史链接，同时保留 token hash 用于访问校验。
+- 分享链接支持单文件、单目录和多目标集合分享；多目标创建使用 `targets` 数组，一个 token 可包含多个文件和目录 item。
+- 目录分享不会在创建时展开成文件快照，而是按目录前缀动态列出当前目录内容；多目标集合中的目录 item 也沿用该动态前缀浏览规则。
 - 公开能力包括 `/api/public/list`、`/random`、`/share/*`、`/api/share/*` 和 `/dav/*`。
 - 系统配置由 `functions/api/manage/sysConfig` 与 `functions/utils/sysConfig.js` 协作读取，配置主要持久化在数据库中。
 
 ## 数据库与存储
 
 - 数据库适配层位于 `functions/utils/databaseAdapter.js`，提供 KV 和 D1 的统一接口。
-- `database/init.sql` 创建 `files`、`settings`、`index_operations`、`index_metadata`、`other_data` 和 `share_links` 表。
-- `database/migrations` 保存增量迁移，目前包含 `tags` 字段和 `share_links` 表迁移。
+- `database/init.sql` 创建 `files`、`settings`、`index_operations`、`index_metadata`、`other_data`、`share_links` 和 `share_link_items` 表。
+- `share_links` 保存 token、过期、撤销、访问统计和旧兼容主目标；`share_link_items` 保存同一分享 token 下的多个文件或目录 item。
+- `database/migrations` 保存增量迁移，目前包含 `tags` 字段、`share_links` 表迁移和 `v2.7.7_add_share_link_items.sql`。
 - D1 逻辑封装在 `functions/utils/d1Database.js`；Docker/Node.js 模式使用 `deploy/server/sqliteD1.js` 模拟 D1。
 - D1 旧库如果已有 `share_links` 表但缺少 `token` 列，`functions/utils/d1Database.js` 会在写入分享链接前自动补列；迁移文件仍用于部署时显式升级。
+- D1 适配层会在写入或读取分享 item 时确保 `share_link_items` 表存在；KV 模式把 item 列表内嵌在 `manage@share@<id>` 分享记录中。
 - 本地 Docker/Node.js 模式使用 `data/database.sqlite` 和 `data/r2`，这些属于运行数据，不应提交。
 - 存储渠道客户端位于 `functions/utils/storage`。
 

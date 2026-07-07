@@ -13,6 +13,7 @@
 
 - 2026-07-06：新增项目级 `AGENTS.md`、`docs/CONTEXT.md` 和 `docs/PROJECT_MEMORY.md`，用于让后续任务保留项目上下文。
 - 2026-07-06：最新提交脉络集中在分享功能和管理导航，包括分享目标选择、分享管理、分享按钮 fallback、过期分享链接、新建文件夹、回收站批量操作和删除确认弹窗。
+- 2026-07-07：分享链接升级为 `share_links` + `share_link_items` 两层模型；新建分享可以用 `targets` 数组让一个 token 包含多个文件和目录。
 - 当前 `package.json` 版本为 `2.7.4`；仓库中已存在 `database/migrations/v2.7.5_add_share_links.sql`，不要仅凭 package 版本判断迁移是否不存在。
 - `frontend-dist` 从 README 的 v2.7.1 公告开始是 Cloudflare Pages 构建输出目录。
 
@@ -34,6 +35,7 @@
 - Telegram 渠道会写入 `SourceGroup`，相关逻辑在 `functions/utils/sourceGroup.js`，测试在 `test/metadata-helpers.test.js`。
 - 分享链接要同时检查 token 状态、目标范围和文件元数据状态；Block、Trash、adult 文件不能因为分享 token 而被公开绕过。
 - 分享管理新记录会保存完整 token，并在管理员列表接口返回 `/share/<token>` URL，便于跨浏览器复制历史链接；旧记录如果没有保存 token，仍只能依赖本浏览器缓存或重新创建。
+- 多目标分享中的目录 item 使用动态目录前缀，不做创建时快照；目录新增文件后，只要文件元数据可访问，就会出现在分享内。
 - 管理端 API 需要 admin 范围鉴权，且响应默认应为 no-store。
 - 文件响应缓存策略需要区分公开访问、管理预览和分享访问；分享访问不应使用公开长缓存。
 
@@ -41,7 +43,9 @@
 
 - `database/init.sql` 是新库初始化脚本；新增表、列、索引或触发器时要同步考虑迁移脚本。
 - `share_links` 既存在于初始化脚本中，也有 `v2.7.5_add_share_links.sql` 和 `v2.7.6_add_share_token.sql` 迁移，用于旧库升级。
+- `share_link_items` 存储多目标分享 item，迁移文件是 `v2.7.7_add_share_link_items.sql`；旧单目标记录即使没有 item，也会通过 `share_links.target_type` / `target_path` 兼容访问。
 - D1 适配层会在写入分享链接前检查旧 `share_links` 表是否缺少 `token` 列，缺失时自动执行补列，避免创建分享时报 `no column named token`。
+- D1 适配层会自动确保 `share_link_items` 表存在；KV 适配层没有独立 item 表，而是把 `items` 内嵌在 `manage@share@<id>` 分享 JSON 中。
 - `files.tags` 既在初始化脚本中存在，也有 `v2.2.1_add_tags_column.sql` 迁移。
 - `functions/utils/databaseAdapter.js` 同时支持 KV 和 D1。修改适配层时要跑相关测试，并确认 KV、D1、SQLite 三种路径是否行为一致。
 - 如果同时配置 KV 和 D1，必须阅读当前适配逻辑确认实际选择顺序，不要仅根据配置检查函数的返回说明做推断。

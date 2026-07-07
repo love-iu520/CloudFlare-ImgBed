@@ -142,9 +142,25 @@ class KVAdapter {
         return await this.put(`manage@share@${share.id}`, JSON.stringify(share));
     }
 
+    async putShareLinkItems(shareId, items) {
+        const share = await this.getShareLinkById(shareId);
+        if (!share) return null;
+        const updated = {
+            ...share,
+            items: Array.isArray(items) ? items : [],
+        };
+        await this.putShareLink(updated);
+        return updated.items;
+    }
+
     async getShareLinkById(id) {
         const value = await this.get(`manage@share@${id}`);
         return value ? JSON.parse(value) : null;
+    }
+
+    async getShareLinkItems(shareId) {
+        const share = await this.getShareLinkById(shareId);
+        return Array.isArray(share?.items) ? share.items : [];
     }
 
     async getShareLinkByTokenHash(tokenHash) {

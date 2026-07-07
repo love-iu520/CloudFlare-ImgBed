@@ -409,10 +409,14 @@ D1Database.prototype.list = function(options) {
 D1Database.prototype.putShareLink = function(share) {
     var self = this;
     return ensureShareTokenColumn(this).then(function() {
+        return ensureShareItemsTable(self);
+    }).then(function() {
         return insertShareLink(self, share);
     }).catch(function(error) {
         if (!isMissingShareTokenColumnError(error)) throw error;
         return addShareTokenColumn(self).then(function() {
+            return ensureShareItemsTable(self);
+        }).then(function() {
             return insertShareLink(self, share);
         });
     });
@@ -483,17 +487,98 @@ function isDuplicateShareTokenColumnError(error) {
     return /duplicate column name: token/i.test(String(error && error.message || error));
 }
 
+D1Database.prototype.putShareLinkItems = function(shareId, items) {
+    var self = this;
+    return ensureShareItemsTable(this).then(function() {
+        var deleteStmt = self.db.prepare('DELETE FROM share_link_items WHERE share_id = ?');
+        return deleteStmt.bind(shareId).run();
+    }).then(function() {
+        items = Array.isArray(items) ? items : [];
+        var insertStmt = self.db.prepare(
+            'INSERT OR REPLACE INTO share_link_items (' +
+            'id, share_id, item_type, item_path, sort_order, created_at_ms' +
+            ') VALUES (?, ?, ?, ?, ?, ?)'
+        );
+        return Promise.all(items.map(function(item) {
+            return insertStmt.bind(
+                item.id,
+                shareId,
+                item.itemType,
+                item.itemPath,
+                item.sortOrder || 0,
+                item.createdAt
+            ).run();
+        }));
+    });
+};
+
+D1Database.prototype.getShareLinkItems = function(shareId) {
+    var self = this;
+    return ensureShareItemsTable(this).then(function() {
+        var stmt = self.db.prepare(
+            'SELECT * FROM share_link_items WHERE share_id = ? ORDER BY sort_order ASC, created_at_ms ASC'
+        );
+        return stmt.bind(shareId).all();
+    }).then(function(response) {
+        return (response.results || []).map(rowToShareLinkItem);
+    });
+};
+
+function ensureShareItemsTable(database) {
+    if (database._shareItemsTableReady) {
+        return Promise.resolve();
+    }
+
+    return database.db.prepare(
+        'CREATE TABLE IF NOT EXISTS share_link_items (' +
+        'id TEXT PRIMARY KEY, ' +
+        'share_id TEXT NOT NULL, ' +
+        "item_type TEXT NOT NULL CHECK (item_type IN ('file', 'directory')), " +
+        'item_path TEXT NOT NULL, ' +
+        'sort_order INTEGER NOT NULL DEFAULT 0, ' +
+        'created_at_ms INTEGER NOT NULL, ' +
+        'created_at DATETIME DEFAULT CURRENT_TIMESTAMP, ' +
+        'FOREIGN KEY (share_id) REFERENCES share_links(id) ON DELETE CASCADE' +
+        ')'
+    ).run().then(function() {
+        return database.db.prepare(
+            'CREATE UNIQUE INDEX IF NOT EXISTS idx_share_link_items_unique ' +
+            'ON share_link_items(share_id, item_type, item_path)'
+        ).run();
+    }).then(function() {
+        return database.db.prepare(
+            'CREATE INDEX IF NOT EXISTS idx_share_link_items_share_order ' +
+            'ON share_link_items(share_id, sort_order)'
+        ).run();
+    }).then(function() {
+        return database.db.prepare(
+            'CREATE INDEX IF NOT EXISTS idx_share_link_items_path ' +
+            'ON share_link_items(item_type, item_path)'
+        ).run();
+    }).then(function(result) {
+        database._shareItemsTableReady = true;
+        return result;
+    });
+}
+
 D1Database.prototype.getShareLinkById = function(id) {
+    var self = this;
     var stmt = this.db.prepare('SELECT * FROM share_links WHERE id = ?');
-    return stmt.bind(id).first().then(rowToShareLink);
+    return stmt.bind(id).first().then(function(row) {
+        return rowToShareLinkWithItems(self, row);
+    });
 };
 
 D1Database.prototype.getShareLinkByTokenHash = function(tokenHash) {
+    var self = this;
     var stmt = this.db.prepare('SELECT * FROM share_links WHERE token_hash = ?');
-    return stmt.bind(tokenHash).first().then(rowToShareLink);
+    return stmt.bind(tokenHash).first().then(function(row) {
+        return rowToShareLinkWithItems(self, row);
+    });
 };
 
 D1Database.prototype.listShareLinks = function(options) {
+    var self = this;
     options = options || {};
     var includeRevoked = options.includeRevoked === true;
     var limit = Math.min(Math.max(parseInt(options.limit, 10) || 100, 1), 1000);
@@ -524,12 +609,16 @@ D1Database.prototype.listShareLinks = function(options) {
             rows.pop();
         }
 
-        var shares = rows.map(rowToShareLink).filter(Boolean);
-        return {
-            shares: shares,
-            cursor: hasMore && shares.length > 0 ? String(shares[shares.length - 1].createdAt) : null,
-            listComplete: !hasMore
-        };
+        return Promise.all(rows.map(function(row) {
+            return rowToShareLinkWithItems(self, row);
+        })).then(function(shares) {
+            shares = shares.filter(Boolean);
+            return {
+                shares: shares,
+                cursor: hasMore && shares.length > 0 ? String(shares[shares.length - 1].createdAt) : null,
+                listComplete: !hasMore
+            };
+        });
     });
 };
 
@@ -563,6 +652,27 @@ function rowToShareLink(row) {
         viewCount: row.view_count || 0,
         lastViewedAt: row.last_viewed_at,
     };
+}
+
+function rowToShareLinkItem(row) {
+    if (!row) return null;
+    return {
+        id: row.id,
+        shareId: row.share_id,
+        itemType: row.item_type,
+        itemPath: row.item_path,
+        sortOrder: row.sort_order || 0,
+        createdAt: row.created_at_ms,
+    };
+}
+
+function rowToShareLinkWithItems(database, row) {
+    var share = rowToShareLink(row);
+    if (!share) return Promise.resolve(null);
+    return database.getShareLinkItems(share.id).then(function(items) {
+        share.items = items;
+        return share;
+    });
 }
 
 // 导出构造函数

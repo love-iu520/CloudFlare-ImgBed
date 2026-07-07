@@ -5,8 +5,10 @@ import {
     encodeFileIdForUrl,
     getShareAvailability,
     getShareByToken,
+    getShareItemsOrLegacy,
     incrementShareView,
     isPathWithinShare,
+    isPathWithinShareItem,
     normalizeDirectoryPath,
     normalizeFilePath,
 } from '../../utils/share/shareLinks.js';
@@ -44,11 +46,27 @@ export async function onRequest(context) {
         }, { status: shareFailureStatus(availability.reason) });
     }
 
-    if (share.targetType === 'file') {
-        return await fileShareResponse(env, share, token);
+    const items = getShareItemsOrLegacy(share);
+    if (items.length > 1) {
+        return await collectionShareResponse(context, share, items, token);
     }
 
-    return await directoryShareResponse(context, share, token);
+    const singleItem = items[0] || {
+        itemType: share.targetType,
+        itemPath: share.targetPath,
+    };
+    const singleShare = {
+        ...share,
+        targetType: singleItem.itemType,
+        targetPath: singleItem.itemPath,
+        items: [singleItem],
+    };
+
+    if (singleShare.targetType === 'file') {
+        return await fileShareResponse(env, singleShare, token);
+    }
+
+    return await directoryShareResponse(context, singleShare, token);
 }
 
 async function fileShareResponse(env, share, token) {
@@ -68,6 +86,100 @@ async function fileShareResponse(env, share, token) {
         success: true,
         share: serializePublicShare(share),
         file: serializePublicFile(share.targetPath, record.metadata, token),
+    });
+}
+
+async function collectionShareResponse(context, share, items, token) {
+    const { request, env } = context;
+    const url = new URL(request.url);
+    const itemId = url.searchParams.get('item') || '';
+    const directoryItem = itemId
+        ? items.find(item => item.id === itemId && item.itemType === 'directory')
+        : null;
+
+    if (itemId && !directoryItem) {
+        return jsonResponse({ success: false, message: 'Share item not found' }, { status: 404 });
+    }
+
+    if (directoryItem) {
+        return await collectionDirectoryShareResponse(context, share, directoryItem, token);
+    }
+
+    const db = getDatabase(env);
+    const files = [];
+    const directories = [];
+
+    for (const item of items) {
+        if (item.itemType === 'directory') {
+            directories.push(serializePublicDirectoryItem(item));
+            continue;
+        }
+
+        const record = await db.getWithMetadata(item.itemPath);
+        if (!record || !record.metadata || !canShareAccessMetadata(record.metadata)) continue;
+        files.push(serializePublicFile(item.itemPath, record.metadata, token));
+    }
+
+    await incrementShareView(env, share.id);
+
+    return jsonResponse({
+        success: true,
+        share: serializePublicShare(share, items),
+        shareType: 'collection',
+        items: items.map(serializePublicShareItem),
+        files,
+        directories,
+        totalCount: files.length + directories.length,
+        returnedCount: files.length,
+    });
+}
+
+async function collectionDirectoryShareResponse(context, share, item, token) {
+    const { request, env } = context;
+    const url = new URL(request.url);
+    const relativeDir = normalizeDirectoryPath(url.searchParams.get('dir') || '');
+    const requestedDir = normalizeDirectoryPath(`${item.itemPath}${relativeDir}`);
+
+    if (!isDirectoryWithinShareItem(item, requestedDir)) {
+        return jsonResponse({ success: false, message: 'Directory is outside this share item' }, { status: 403 });
+    }
+
+    const start = parseInt(url.searchParams.get('start'), 10) || 0;
+    const count = Math.min(Math.max(parseInt(url.searchParams.get('count'), 10) || 100, 1), 500);
+    let result = await readIndex(context, {
+        directory: requestedDir,
+        start,
+        count,
+        includeSubdirFiles: false,
+        accessStatus: 'normal',
+    });
+
+    if (!result.success) {
+        result = await listDirectoryFromDatabase(env, requestedDir, start, count);
+    }
+
+    const files = (result.files || [])
+        .filter(file => canShareAccessMetadata(file.metadata))
+        .filter(file => isPathWithinShareItem(item, file.id || file.name))
+        .filter(file => !isFolderPlaceholder(file.id || file.name, file.metadata))
+        .map(file => serializePublicFile(file.id || file.name, file.metadata || {}, token));
+
+    await incrementShareView(env, share.id);
+
+    return jsonResponse({
+        success: true,
+        share: serializePublicShare(share, getShareItemsOrLegacy(share)),
+        shareType: 'collection',
+        item: serializePublicShareItem(item),
+        directory: {
+            path: requestedDir,
+            relativePath: relativeDir,
+            itemId: item.id,
+        },
+        files,
+        directories: normalizeDirectoryListForItem(item, result.directories || []),
+        totalCount: result.totalCount || files.length,
+        returnedCount: files.length,
     });
 }
 
@@ -166,6 +278,13 @@ function isDirectoryWithinShare(share, directory) {
     return base === '' || requested === base || requested.startsWith(base);
 }
 
+function isDirectoryWithinShareItem(item, directory) {
+    if (!item || item.itemType !== 'directory') return false;
+    const base = normalizeDirectoryPath(item.itemPath);
+    const requested = normalizeDirectoryPath(directory);
+    return base === '' || requested === base || requested.startsWith(base);
+}
+
 function normalizeDirectoryList(share, directories) {
     const base = normalizeDirectoryPath(share.targetPath);
     return directories
@@ -178,13 +297,47 @@ function normalizeDirectoryList(share, directories) {
         }));
 }
 
-function serializePublicShare(share) {
+function normalizeDirectoryListForItem(item, directories) {
+    const base = normalizeDirectoryPath(item.itemPath);
+    return directories
+        .map(directory => normalizeDirectoryPath(directory))
+        .filter(directory => isDirectoryWithinShareItem(item, directory))
+        .map(directory => ({
+            name: directory.replace(/\/$/g, '').split('/').pop() || '',
+            path: directory,
+            relativePath: base && directory.startsWith(base) ? directory.slice(base.length) : directory,
+            itemId: item.id,
+        }));
+}
+
+function serializePublicDirectoryItem(item) {
+    const path = normalizeDirectoryPath(item.itemPath);
+    return {
+        name: path.replace(/\/$/g, '').split('/').pop() || '/',
+        path,
+        relativePath: '',
+        itemId: item.id,
+    };
+}
+
+function serializePublicShare(share, items = getShareItemsOrLegacy(share)) {
     return {
         id: share.id,
         targetType: share.targetType,
         targetPath: share.targetPath,
+        shareType: items.length > 1 ? 'collection' : share.targetType,
         expiresAt: share.expiresAt ?? null,
         createdAt: share.createdAt,
+        items: items.map(serializePublicShareItem),
+    };
+}
+
+function serializePublicShareItem(item) {
+    return {
+        id: item.id,
+        itemType: item.itemType,
+        itemPath: item.itemPath,
+        sortOrder: item.sortOrder || 0,
     };
 }
 

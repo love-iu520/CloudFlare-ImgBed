@@ -127,7 +127,8 @@ assert.match(createShareForCurrentTarget, /expiresInSeconds/, 'share action shou
 assert.match(createShareForCurrentTarget, /\.catch\(/, 'share action should show modal and API failures instead of failing silently');
 assert.doesNotMatch(createShareForCurrentTarget, /dashboardUnavailable/, 'share action should not fail just because the dashboard proxy is unavailable');
 assert.match(createShareForCurrentTarget, /collectShareTargetOptions\(proxy\)/, 'share action should collect selectable file and directory targets');
-assert.match(createShareForCurrentTarget, /result\.target/, 'share action should use the target chosen in the modal');
+assert.match(createShareForCurrentTarget, /targets:\s*result\.targets\.map/, 'share action should submit all targets chosen in the modal');
+assert.match(createShareForCurrentTarget, /JSON\.stringify\(body\)/, 'share action should send a JSON body with the selected targets');
 const resolveShareTarget = extractFunctionBody(navHotfix, 'resolveShareTarget');
 assert.match(resolveShareTarget, /proxy\.selectedFiles/, 'share target should prefer a selected file or folder');
 assert.match(resolveShareTarget, /proxy\.currentPath/, 'share target should fall back to the current directory');
@@ -198,7 +199,10 @@ assert.match(shareItemFromDomNode, /matchingShareRowFromDom/, 'DOM share fallbac
 assert.match(shareItemFromDomNode, /findDashboardPathFromDom/, 'DOM share fallback should keep file targets inside the current breadcrumb directory');
 assert.match(shareItemFromDomNode, /withShareBasePath\(row, findDashboardPathFromDom\(\)\)/, 'DOM share fallback should keep matched row names inside the current folder');
 const promptShareExpiry = extractFunctionBody(navHotfix, 'promptShareExpiry');
-assert.match(promptShareExpiry, /data-share-target/, 'share creation modal should let the user choose the target');
+assert.match(promptShareExpiry, /cfib-share-target-list/, 'share creation modal should show the selected share targets');
+assert.match(promptShareExpiry, /type="checkbox"/, 'share creation modal should allow removing individual selected targets');
+assert.match(promptShareExpiry, /data-share-target-index/, 'share creation modal should map checked rows back to target options');
+assert.match(promptShareExpiry, /targets:\s*targets/, 'share creation modal should resolve with a target array');
 assert.match(promptShareExpiry, /data-share-action="confirm"/, 'share creation modal should include a visible confirm button');
 assert.match(promptShareExpiry, /event\.key === "Enter"/, 'share creation modal should allow Enter to confirm the selected expiry');
 assert.match(promptShareExpiry, /604800" selected/, 'share creation modal should default to seven days');
@@ -283,6 +287,8 @@ assert.match(css, /\.cfib-confirm-modal/, 'permanent delete should have an in-ap
 assert.match(css, /\.cfib-folder-input/, 'new folder modal should have input styles');
 assert.match(css, /\.cfib-share-result/, 'share result modal should have styles');
 assert.match(css, /\.cfib-primary-link/, 'share result should style the open link as a primary action');
+assert.match(css, /\.cfib-share-target-list/, 'share creation modal should have a target list layout');
+assert.match(css, /\.cfib-share-target-item/, 'share creation modal should have target item styles');
 assert.match(css, /\.cfib-share-list/, 'share manager should have list layout styles');
 assert.match(css, /\.cfib-share-row/, 'share manager should have row layout styles');
 assert.doesNotMatch(css, /quick-toolbar\[data-v-060c1790\]\s*\{[^}]*opacity:\s*0/, 'upload page quick toolbar should not be hidden by the nav hotfix');

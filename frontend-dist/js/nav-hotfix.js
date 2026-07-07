@@ -1128,8 +1128,12 @@
       if (!result) return;
 
       var body = {
-        targetType: result.target.targetType,
-        targetPath: result.target.targetPath
+        targets: result.targets.map(function (target) {
+          return {
+            targetType: target.targetType,
+            targetPath: target.targetPath
+          };
+        })
       };
       if (result.expiresInSeconds === null) {
         body.expiresAt = null;
@@ -1459,8 +1463,17 @@
         targetPath: "",
         label: formatShareTarget({ targetType: "directory", targetPath: "" })
       }];
-      var targetOptionsHtml = options.map(function (target, index) {
-        return '<option value="' + index + '">' + escapeHtml(target.label || formatShareTarget(target)) + '</option>';
+      var hasPreferredTargets = options.some(function (target) {
+        return target.__preferred;
+      });
+      var selectedOptions = hasPreferredTargets ? options.filter(function (target) {
+        return target.__preferred;
+      }) : options;
+      var targetOptionsHtml = selectedOptions.map(function (target, index) {
+        return '<label class="cfib-share-target-item">' +
+          '<input type="checkbox" data-share-target-index="' + index + '" checked>' +
+          '<span>' + escapeHtml(target.label || formatShareTarget(target)) + '</span>' +
+          '</label>';
       }).join("");
       var confirmModal = document.createElement("div");
       confirmModal.className = "cfib-confirm-modal is-open";
@@ -1468,12 +1481,12 @@
         '<div class="cfib-confirm-backdrop" data-share-action="cancel"></div>' +
         '<section class="cfib-confirm-panel cfib-share-panel" role="dialog" aria-modal="true">' +
         '<h3 class="cfib-confirm-title">' + escapeHtml(text("shareTitle")) + '</h3>' +
-        '<label class="cfib-folder-field">' +
+        '<div class="cfib-folder-field">' +
         '<span>' + escapeHtml(text("shareTarget")) + '</span>' +
-        '<select class="cfib-folder-input cfib-share-select" data-share-target="true">' +
+        '<div class="cfib-share-target-list" data-share-target-list="true">' +
         targetOptionsHtml +
-        '</select>' +
-        '</label>' +
+        '</div>' +
+        '</div>' +
         '<label class="cfib-folder-field">' +
         '<span>' + escapeHtml(text("shareExpires")) + '</span>' +
         '<select class="cfib-folder-input cfib-share-select" data-share-expiry="true">' +
@@ -1502,16 +1515,25 @@
           finish(false);
           return;
         }
-        var targetInput = confirmModal.querySelector("[data-share-target]");
-        var targetIndex = targetInput ? Number(targetInput.value) : 0;
-        var target = options[Number.isFinite(targetIndex) ? targetIndex : 0] || options[0];
+        var targets = [];
+        confirmModal.querySelectorAll("[data-share-target-index]:checked").forEach(function (inputNode) {
+          var targetIndex = Number(inputNode.getAttribute("data-share-target-index"));
+          var target = selectedOptions[Number.isFinite(targetIndex) ? targetIndex : 0];
+          if (target) {
+            targets.push({
+              targetType: target.targetType,
+              targetPath: target.targetPath
+            });
+          }
+        });
+        if (!targets.length) {
+          showToast(text("selectOneShareTarget"), "error");
+          return;
+        }
         var input = confirmModal.querySelector("[data-share-expiry]");
         var value = input ? input.value : "604800";
         finish({
-          target: {
-            targetType: target.targetType,
-            targetPath: target.targetPath
-          },
+          targets: targets,
           expiresInSeconds: value === "" ? null : Number(value)
         });
       });
@@ -1525,8 +1547,8 @@
       });
 
       document.body.appendChild(confirmModal);
-      var select = confirmModal.querySelector("[data-share-target]");
-      if (select) select.focus();
+      var firstTarget = confirmModal.querySelector("[data-share-target-index]");
+      if (firstTarget) firstTarget.focus();
     });
   }
 

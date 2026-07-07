@@ -289,6 +289,124 @@ describe('share links', () => {
     assert.equal(publicBody.file.name, 'photos/internal-id.png');
   });
 
+  it('creates one token for multiple selected file targets', async () => {
+    const env = createEnv();
+    await seedFile(env, 'photos/a.jpg');
+    await seedFile(env, 'photos/b.jpg');
+    await seedFile(env, 'photos/outside.jpg');
+
+    const createResponse = await manageShareRequest({
+      env,
+      request: jsonRequest('https://img.example/api/manage/share', {
+        targets: [
+          { targetType: 'file', targetPath: 'photos/a.jpg' },
+          { targetType: 'file', targetPath: 'photos/b.jpg' },
+        ],
+        expiresInSeconds: 604800,
+      }),
+    });
+    assert.equal(createResponse.status, 201);
+
+    const created = await createResponse.json();
+    assert.equal(created.success, true);
+    assert.equal(created.share.targetType, 'file');
+    assert.equal(created.share.targetPath, 'photos/a.jpg');
+    assert.deepEqual(created.share.items.map(item => item.itemPath), ['photos/a.jpg', 'photos/b.jpg']);
+
+    const token = created.url.split('/share/')[1];
+    const publicResponse = await publicShareRequest({
+      env,
+      request: new Request(`https://img.example/api/share/${token}`),
+      params: { path: token },
+    });
+    assert.equal(publicResponse.status, 200);
+    const publicBody = await publicResponse.json();
+    assert.equal(publicBody.shareType, 'collection');
+    assert.equal(publicBody.share.shareType, 'collection');
+    assert.deepEqual(publicBody.files.map(file => file.name), ['photos/a.jpg', 'photos/b.jpg']);
+
+    const allowedA = await validateShareTokenForFile(env, token, 'photos/a.jpg', { ListType: 'None' });
+    const allowedB = await validateShareTokenForFile(env, token, 'photos/b.jpg', { ListType: 'None' });
+    const outside = await validateShareTokenForFile(env, token, 'photos/outside.jpg', { ListType: 'None' });
+    assert.equal(allowedA.valid, true);
+    assert.equal(allowedB.valid, true);
+    assert.equal(outside.valid, false);
+    assert.equal(outside.reason, 'outside-scope');
+  });
+
+  it('creates mixed file and directory collection shares with directory item navigation', async () => {
+    const env = createEnv();
+    await seedFile(env, 'photos/cover.jpg');
+    await seedFile(env, 'photos/trip/a.jpg');
+    await seedFile(env, 'photos/trip/nested/b.jpg');
+    await seedFile(env, 'private/outside.jpg');
+    await rebuildIndex({ env, waitUntil });
+
+    const createResponse = await manageShareRequest({
+      env,
+      request: jsonRequest('https://img.example/api/manage/share', {
+        targets: [
+          { targetType: 'file', targetPath: 'photos/cover.jpg' },
+          { targetType: 'directory', targetPath: 'photos/trip' },
+        ],
+        expiresInSeconds: 604800,
+      }),
+    });
+    assert.equal(createResponse.status, 201);
+
+    const created = await createResponse.json();
+    assert.deepEqual(created.share.items.map(item => `${item.itemType}:${item.itemPath}`), [
+      'file:photos/cover.jpg',
+      'directory:photos/trip/',
+    ]);
+
+    const token = created.url.split('/share/')[1];
+    const rootResponse = await publicShareRequest({
+      env,
+      waitUntil,
+      request: new Request(`https://img.example/api/share/${token}`),
+      params: { path: token },
+    });
+    assert.equal(rootResponse.status, 200);
+    const rootBody = await rootResponse.json();
+    assert.equal(rootBody.shareType, 'collection');
+    assert.deepEqual(rootBody.files.map(file => file.name), ['photos/cover.jpg']);
+    assert.equal(rootBody.directories.length, 1);
+    assert.equal(rootBody.directories[0].path, 'photos/trip/');
+    assert.ok(rootBody.directories[0].itemId);
+
+    const directoryItemId = rootBody.directories[0].itemId;
+    const directoryResponse = await publicShareRequest({
+      env,
+      waitUntil,
+      request: new Request(`https://img.example/api/share/${token}?item=${encodeURIComponent(directoryItemId)}`),
+      params: { path: token },
+    });
+    assert.equal(directoryResponse.status, 200);
+    const directoryBody = await directoryResponse.json();
+    assert.equal(directoryBody.directory.itemId, directoryItemId);
+    assert.deepEqual(directoryBody.files.map(file => file.name), ['photos/trip/a.jpg']);
+    assert.deepEqual(directoryBody.directories.map(directory => directory.relativePath), ['nested/']);
+
+    await seedFile(env, 'photos/trip/new.jpg');
+    await rebuildIndex({ env, waitUntil });
+    const updatedDirectoryResponse = await publicShareRequest({
+      env,
+      waitUntil,
+      request: new Request(`https://img.example/api/share/${token}?item=${encodeURIComponent(directoryItemId)}`),
+      params: { path: token },
+    });
+    assert.equal(updatedDirectoryResponse.status, 200);
+    const updatedDirectoryBody = await updatedDirectoryResponse.json();
+    assert.deepEqual(updatedDirectoryBody.files.map(file => file.name), ['photos/trip/a.jpg', 'photos/trip/new.jpg']);
+
+    const insideDirectory = await validateShareTokenForFile(env, token, 'photos/trip/nested/b.jpg', { ListType: 'None' });
+    const outsideDirectory = await validateShareTokenForFile(env, token, 'photos/other.jpg', { ListType: 'None' });
+    assert.equal(insideDirectory.valid, true);
+    assert.equal(outsideDirectory.valid, false);
+    assert.equal(outsideDirectory.reason, 'outside-scope');
+  });
+
   it('lists shared directory children with relative paths for navigation', async () => {
     const env = createEnv();
     await seedFile(env, 'photos/root.jpg');
@@ -336,7 +454,9 @@ describe('share links', () => {
     });
     assert.equal(response.status, 200);
     const html = await response.text();
-    assert.match(html, /shareApiHref\(initialDir\)/, 'share page should load the requested directory');
+    assert.match(html, /initialItem/, 'share page should preserve a selected collection directory item');
+    assert.match(html, /shareApiHref\(initialDir, initialItem\)/, 'share page should load the selected collection item directory');
+    assert.match(html, /sharePageHref\(relativePath, itemId\)/, 'share page directory links should include the collection item id');
     assert.match(html, /function renderDirectory/, 'share page should render clickable directories');
     assert.match(html, /download="/, 'share page should expose a download action for files');
     assert.match(html, /返回/, 'share page should allow navigation back to a parent directory');
@@ -399,6 +519,7 @@ describe('share links', () => {
     });
     assert.equal(listed.shares[0].id, created.share.id);
     assert.equal(listed.shares[0].url, `https://img.example/share/${encodeURIComponent(created.token)}`);
+    assert.deepEqual(listed.shares[0].items.map(item => item.itemPath), ['photos/']);
 
     await revokeShareLink(env, created.share.id);
     const revoked = await validateShareTokenForFile(env, created.token, 'photos/a.jpg', {
@@ -434,5 +555,37 @@ describe('share links', () => {
     });
     assert.equal(listed.shares[0].id, created.share.id);
     assert.equal(listed.shares[0].url, `https://img.example/share/${encodeURIComponent(created.token)}`);
+    assert.deepEqual(listed.shares[0].items.map(item => item.itemPath), ['photos/']);
+  });
+
+  it('creates the D1 share_link_items table for both new and older schemas', async function () {
+    this.timeout(5000);
+
+    const newD1 = new SqliteD1(':memory:');
+    newD1.exec(readFileSync(new URL('../database/init.sql', import.meta.url), 'utf8'));
+    const newColumns = await newD1.prepare('PRAGMA table_info(share_link_items)').all();
+    assert.ok(newColumns.results.some(column => column.name === 'item_path'));
+
+    const oldD1 = new SqliteD1(':memory:');
+    oldD1.exec(readFileSync(new URL('../database/migrations/v2.7.5_add_share_links.sql', import.meta.url), 'utf8'));
+    const env = { img_d1: oldD1 };
+    const created = await createShareLink(env, {
+      targets: [
+        { targetType: 'file', targetPath: 'photos/a.jpg' },
+        { targetType: 'directory', targetPath: 'photos/trip' },
+      ],
+      expiresInSeconds: 3600,
+    });
+
+    const oldColumns = await oldD1.prepare('PRAGMA table_info(share_link_items)').all();
+    assert.ok(oldColumns.results.some(column => column.name === 'item_path'));
+
+    const rows = await oldD1.prepare('SELECT item_type, item_path FROM share_link_items WHERE share_id = ? ORDER BY sort_order ASC')
+      .bind(created.share.id)
+      .all();
+    assert.deepEqual(rows.results.map(row => `${row.item_type}:${row.item_path}`), [
+      'file:photos/a.jpg',
+      'directory:photos/trip/',
+    ]);
   });
 });

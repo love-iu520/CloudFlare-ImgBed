@@ -649,6 +649,33 @@
   cursor: pointer;
 }
 
+.cfib-share-target-list {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.cfib-share-target-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, .28);
+  border-radius: 8px;
+  background: var(--el-fill-color-blank, #fff);
+  font-size: 13px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.cfib-share-target-item span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .cfib-share-result {
   display: grid;
   gap: 12px;

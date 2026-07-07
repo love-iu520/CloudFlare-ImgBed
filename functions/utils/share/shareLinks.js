@@ -42,16 +42,67 @@ export function normalizeShareTarget(targetType, targetPath) {
     };
 }
 
+export function normalizeShareTargets(targetsOrOptions = {}) {
+    const rawTargets = Array.isArray(targetsOrOptions)
+        ? targetsOrOptions
+        : Array.isArray(targetsOrOptions.targets)
+            ? targetsOrOptions.targets
+            : [{
+                targetType: targetsOrOptions.targetType,
+                targetPath: targetsOrOptions.targetPath,
+            }];
+    const targets = [];
+    const seen = new Set();
+
+    for (const rawTarget of rawTargets) {
+        const target = normalizeShareTarget(rawTarget?.targetType, rawTarget?.targetPath);
+        const key = `${target.targetType}:${target.targetPath}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        targets.push(target);
+    }
+
+    if (!targets.length) {
+        throw new Error('At least one share target is required');
+    }
+
+    return targets;
+}
+
 export function isPathWithinShare(share, fileId) {
     const normalizedFile = normalizeFilePath(fileId);
     if (!share || !normalizedFile) return false;
 
-    if (share.targetType === 'file') {
-        return normalizedFile === normalizeFilePath(share.targetPath);
+    return getShareItemsOrLegacy(share).some(item => isPathWithinShareItem(item, normalizedFile));
+}
+
+export function getShareItemsOrLegacy(share) {
+    if (!share) return [];
+    if (Array.isArray(share.items) && share.items.length > 0) {
+        return share.items;
     }
 
-    if (share.targetType === 'directory') {
-        const directory = normalizeDirectoryPath(share.targetPath);
+    if (!share.targetType) return [];
+    return [{
+        id: `${share.id || 'legacy'}:target`,
+        shareId: share.id,
+        itemType: share.targetType,
+        itemPath: share.targetPath,
+        sortOrder: 0,
+        createdAt: share.createdAt || 0,
+    }];
+}
+
+export function isPathWithinShareItem(item, fileId) {
+    const normalizedFile = normalizeFilePath(fileId);
+    if (!item || !normalizedFile) return false;
+
+    if (item.itemType === 'file') {
+        return normalizedFile === normalizeFilePath(item.itemPath);
+    }
+
+    if (item.itemType === 'directory') {
+        const directory = normalizeDirectoryPath(item.itemPath);
         return directory === '' || normalizedFile.startsWith(directory);
     }
 
@@ -73,7 +124,8 @@ export function canShareAccessMetadata(metadata = {}) {
 export async function createShareLink(env, options = {}) {
     const db = getDatabase(env);
     const now = normalizeNow(options.now);
-    const target = normalizeShareTarget(options.targetType, options.targetPath);
+    const targets = normalizeShareTargets(options);
+    const target = targets[0];
     const token = options.token || generateShareToken();
     const share = {
         id: options.id || generateShareId(now),
@@ -89,8 +141,20 @@ export async function createShareLink(env, options = {}) {
         viewCount: 0,
         lastViewedAt: null,
     };
+    const items = targets.map((target, index) => ({
+        id: `${share.id}_item_${index}_${generateShortRandom(6)}`,
+        shareId: share.id,
+        itemType: target.targetType,
+        itemPath: target.targetPath,
+        sortOrder: index,
+        createdAt: now,
+    }));
+    share.items = items;
 
     await db.putShareLink(share);
+    if (typeof db.putShareLinkItems === 'function') {
+        await db.putShareLinkItems(share.id, items);
+    }
 
     return {
         token,
@@ -222,6 +286,7 @@ export function serializeShareForManagement(share, options = {}) {
         updatedAt: share.updatedAt,
         viewCount: share.viewCount || 0,
         lastViewedAt: share.lastViewedAt ?? null,
+        items: getShareItemsOrLegacy(share).map(serializeShareItem),
     };
 
     if (share.token && options.origin) {
@@ -229,6 +294,17 @@ export function serializeShareForManagement(share, options = {}) {
     }
 
     return serialized;
+}
+
+function serializeShareItem(item) {
+    return {
+        id: item.id,
+        shareId: item.shareId,
+        itemType: item.itemType,
+        itemPath: item.itemPath,
+        sortOrder: item.sortOrder || 0,
+        createdAt: item.createdAt,
+    };
 }
 
 export function normalizeFilePath(fileId) {
