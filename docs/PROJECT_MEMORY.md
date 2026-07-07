@@ -33,14 +33,14 @@
 - 支持的上传渠道包括 Telegram、Cloudflare R2、S3、Discord、Hugging Face、WebDAV 和 External。
 - Telegram 渠道会写入 `SourceGroup`，相关逻辑在 `functions/utils/sourceGroup.js`，测试在 `test/metadata-helpers.test.js`。
 - 分享链接要同时检查 token 状态、目标范围和文件元数据状态；Block、Trash、adult 文件不能因为分享 token 而被公开绕过。
-- 分享管理只在后端保存 token hash 和前缀，历史记录无法还原完整 `/share/<token>`；前端热修复仅对本浏览器新创建的分享链接做本地 URL 缓存。
+- 分享管理新记录会保存完整 token，并在管理员列表接口返回 `/share/<token>` URL，便于跨浏览器复制历史链接；旧记录如果没有保存 token，仍只能依赖本浏览器缓存或重新创建。
 - 管理端 API 需要 admin 范围鉴权，且响应默认应为 no-store。
 - 文件响应缓存策略需要区分公开访问、管理预览和分享访问；分享访问不应使用公开长缓存。
 
 ## 数据库记忆
 
 - `database/init.sql` 是新库初始化脚本；新增表、列、索引或触发器时要同步考虑迁移脚本。
-- `share_links` 既存在于初始化脚本中，也有 `v2.7.5_add_share_links.sql` 迁移，用于旧库升级。
+- `share_links` 既存在于初始化脚本中，也有 `v2.7.5_add_share_links.sql` 和 `v2.7.6_add_share_token.sql` 迁移，用于旧库升级。
 - `files.tags` 既在初始化脚本中存在，也有 `v2.2.1_add_tags_column.sql` 迁移。
 - `functions/utils/databaseAdapter.js` 同时支持 KV 和 D1。修改适配层时要跑相关测试，并确认 KV、D1、SQLite 三种路径是否行为一致。
 - 如果同时配置 KV 和 D1，必须阅读当前适配逻辑确认实际选择顺序，不要仅根据配置检查函数的返回说明做推断。

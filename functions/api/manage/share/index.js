@@ -57,6 +57,7 @@ async function createShare(context) {
     const { request, env } = context;
     const body = await parseJsonBody(request);
     const target = normalizeShareTarget(body.targetType, body.targetPath);
+    const url = new URL(request.url);
 
     await assertShareTargetAllowed(env, target);
 
@@ -65,8 +66,8 @@ async function createShare(context) {
         targetPath: target.targetPath,
         expiresAt: body.expiresAt,
         expiresInSeconds: body.expiresInSeconds,
+        shareOrigin: url.origin,
     });
-    const url = new URL(request.url);
 
     return jsonResponse({
         success: true,
@@ -80,7 +81,12 @@ async function listShares(request, env) {
     const includeRevoked = url.searchParams.get('includeRevoked') === 'true';
     const limit = parseInt(url.searchParams.get('limit'), 10) || 100;
     const cursor = url.searchParams.get('cursor') || undefined;
-    const result = await listShareLinks(env, { includeRevoked, limit, cursor });
+    const result = await listShareLinks(env, {
+        includeRevoked,
+        limit,
+        cursor,
+        shareOrigin: url.origin,
+    });
 
     return jsonResponse({
         success: true,

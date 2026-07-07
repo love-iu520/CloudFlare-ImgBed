@@ -77,6 +77,7 @@ export async function createShareLink(env, options = {}) {
     const token = options.token || generateShareToken();
     const share = {
         id: options.id || generateShareId(now),
+        token,
         tokenHash: await hashShareToken(token),
         tokenPrefix: token.slice(0, 8),
         targetType: target.targetType,
@@ -93,7 +94,9 @@ export async function createShareLink(env, options = {}) {
 
     return {
         token,
-        share: serializeShareForManagement(share),
+        share: serializeShareForManagement(share, {
+            origin: options.shareOrigin,
+        }),
     };
 }
 
@@ -114,7 +117,9 @@ export async function listShareLinks(env, options = {}) {
     const result = await db.listShareLinks(options);
     const shares = Array.isArray(result?.shares) ? result.shares : [];
     return {
-        shares: shares.map(serializeShareForManagement),
+        shares: shares.map(share => serializeShareForManagement(share, {
+            origin: options.shareOrigin,
+        })),
         cursor: result?.cursor || null,
         listComplete: result?.listComplete !== false,
     };
@@ -155,7 +160,9 @@ export async function updateShareExpiry(env, id, options = {}, now = Date.now())
         updatedAt,
     };
     await db.putShareLink(updated);
-    return serializeShareForManagement(updated);
+    return serializeShareForManagement(updated, {
+        origin: options.shareOrigin,
+    });
 }
 
 export async function incrementShareView(env, id, now = Date.now()) {
@@ -202,9 +209,9 @@ export async function validateShareTokenForFile(env, token, fileId, metadata = {
     return { valid: true, reason: 'active', share };
 }
 
-export function serializeShareForManagement(share) {
+export function serializeShareForManagement(share, options = {}) {
     if (!share) return null;
-    return {
+    const serialized = {
         id: share.id,
         tokenPrefix: share.tokenPrefix,
         targetType: share.targetType,
@@ -216,6 +223,12 @@ export function serializeShareForManagement(share) {
         viewCount: share.viewCount || 0,
         lastViewedAt: share.lastViewedAt ?? null,
     };
+
+    if (share.token && options.origin) {
+        serialized.url = buildShareUrl(options.origin, share.token);
+    }
+
+    return serialized;
 }
 
 export function normalizeFilePath(fileId) {
@@ -278,6 +291,12 @@ function generateShareToken() {
     const bytes = new Uint8Array(SHARE_TOKEN_BYTES);
     globalThis.crypto.getRandomValues(bytes);
     return bytesToBase64Url(bytes);
+}
+
+function buildShareUrl(origin, token) {
+    const normalizedOrigin = String(origin || '').replace(/\/+$/, '');
+    if (!normalizedOrigin || !token) return '';
+    return `${normalizedOrigin}/share/${encodeURIComponent(token)}`;
 }
 
 function generateShortRandom(length) {

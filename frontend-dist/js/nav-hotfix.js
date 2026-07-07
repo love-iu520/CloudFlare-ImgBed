@@ -58,7 +58,7 @@
       shareRevoked: "分享链接已撤销",
       shareUpdated: "分享链接已更新",
       editShareExpiry: "修改有效期",
-      shareUrlUnavailable: "完整链接仅在本浏览器创建后可用",
+      shareUrlUnavailable: "旧分享缺少完整链接，请重新创建",
       copy: "复制",
       selectOneShareTarget: "请选择一个文件或文件夹，或取消选择以分享当前目录",
       newFolderTitle: "新建文件夹",
@@ -139,7 +139,7 @@
       shareRevoked: "Share link revoked",
       shareUpdated: "Share link updated",
       editShareExpiry: "Edit expiry",
-      shareUrlUnavailable: "Full link is only available in this browser after creation",
+      shareUrlUnavailable: "This older share did not save a full link. Recreate it to copy",
       copy: "Copy",
       selectOneShareTarget: "Select one file or folder, or clear selection to share the current directory",
       newFolderTitle: "New Folder",
@@ -1212,7 +1212,7 @@
 
   function normalizeShareTargetOption(file) {
     if (!file || typeof file !== "object") return null;
-    var selectedPath = file.name || file.id || file.fileId || file.path || file.key || "";
+    var selectedPath = resolveShareTargetPath(file);
     if (selectedPath && file.__shareBasePath && String(selectedPath).indexOf("/") === -1) {
       selectedPath = joinSharePath(file.__shareBasePath, selectedPath);
     }
@@ -1226,6 +1226,20 @@
         targetPath: selectedPath
       })
     };
+  }
+
+  function resolveShareTargetPath(file) {
+    var candidates = [file.id, file.fileId, file.path, file.key, file.name];
+    var selectedPath = "";
+    for (var index = 0; index < candidates.length; index += 1) {
+      var value = String(candidates[index] || "").trim();
+      if (!value) continue;
+      if (value.indexOf("/") !== -1) return value;
+      if (!selectedPath || (looksLikeFileName(value) && !looksLikeFileName(selectedPath))) {
+        selectedPath = value;
+      }
+    }
+    return selectedPath;
   }
 
   function isShareDirectoryTarget(file, selectedPath) {

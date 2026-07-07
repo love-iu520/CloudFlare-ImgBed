@@ -5,6 +5,7 @@ import {
   canShareAccessMetadata,
   createShareLink,
   isPathWithinShare,
+  listShareLinks,
   normalizeShareTarget,
   revokeShareLink,
   updateShareExpiry,
@@ -179,8 +180,19 @@ describe('share links', () => {
     assert.match(created.url, /^https:\/\/img\.example\/share\//);
     assert.equal(created.share.targetType, 'file');
     assert.equal(created.share.targetPath, 'photos/a.jpg');
+    assert.equal(created.share.url, created.url);
     assert.ok(created.share.expiresAt >= beforeCreate + 604799000);
     assert.ok(created.share.expiresAt <= Date.now() + 604801000);
+
+    const listResponse = await manageShareRequest({
+      env,
+      request: new Request('https://img.example/api/manage/share?limit=100'),
+    });
+    assert.equal(listResponse.status, 200);
+    const listed = await listResponse.json();
+    assert.equal(listed.success, true);
+    assert.equal(listed.shares[0].id, created.share.id);
+    assert.equal(listed.shares[0].url, created.url);
 
     const beforeUpdate = Date.now();
     const updateResponse = await manageSharePathRequest({
@@ -290,6 +302,12 @@ describe('share links', () => {
       ListType: 'None',
     });
     assert.equal(valid.valid, true);
+
+    const listed = await listShareLinks(env, {
+      shareOrigin: 'https://img.example',
+    });
+    assert.equal(listed.shares[0].id, created.share.id);
+    assert.equal(listed.shares[0].url, `https://img.example/share/${encodeURIComponent(created.token)}`);
 
     await revokeShareLink(env, created.share.id);
     const revoked = await validateShareTokenForFile(env, created.token, 'photos/a.jpg', {

@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS other_data (
 
 CREATE TABLE IF NOT EXISTS share_links (
     id TEXT PRIMARY KEY,
+    token TEXT,
     token_hash TEXT NOT NULL UNIQUE,
     token_prefix TEXT NOT NULL,
     target_type TEXT NOT NULL CHECK (target_type IN ('file', 'directory')),

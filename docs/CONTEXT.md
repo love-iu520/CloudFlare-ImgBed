@@ -67,7 +67,7 @@
 ### 管理与公开能力
 
 - 管理端 API 位于 `functions/api/manage`，覆盖文件列表、删除、移动、重命名、白名单/黑名单、回收站恢复、标签、批量索引、系统配置、来源组、Telegram 导入和分享管理。
-- 分享管理 API 支持创建、列表、撤销和更新有效期；分享记录只保存 token hash 和前缀，不保存完整 token。
+- 分享管理 API 支持创建、列表、撤销和更新有效期；新分享记录保存完整 token 以便管理员复制历史链接，同时保留 token hash 用于访问校验。
 - 公开能力包括 `/api/public/list`、`/random`、`/share/*`、`/api/share/*` 和 `/dav/*`。
 - 系统配置由 `functions/api/manage/sysConfig` 与 `functions/utils/sysConfig.js` 协作读取，配置主要持久化在数据库中。
 
@@ -103,7 +103,7 @@
 - 数据库配置可使用 KV `img_url` 或 D1 `img_d1`；修改适配层时要同时确认 Pages、Workers 和 Docker/SQLite 三种运行模式。
 - `deploy/worker/generate-toml.js` 会从环境变量读取 Cloudflare binding 信息，并对输出日志中的敏感字段做脱敏；不要在文档或日志中打印真实凭据。
 - 管理端 API 默认应返回 `private, no-store, max-age=0`，不要让管理数据被公开缓存。
-- 分享链接应校验过期、撤销、目标路径范围和文件元数据状态，不能绕过 Block、Trash 或 adult 限制。
+- 分享链接应校验过期、撤销、目标路径范围和文件元数据状态，不能绕过 Block、Trash 或 adult 限制；管理接口可返回完整分享 URL，公开接口不应泄露管理数据。
 - Telegram、Discord、Hugging Face、S3、WebDAV 等渠道配置包含敏感凭据，读取和调试时只输出脱敏摘要。
 
 ## 推荐验证方式

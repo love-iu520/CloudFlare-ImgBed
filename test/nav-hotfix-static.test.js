@@ -140,6 +140,8 @@ const normalizeShareTargetOption = extractFunctionBody(navHotfix, 'normalizeShar
 assert.match(normalizeShareTargetOption, /!file/, 'share target normalization should ignore nullish items');
 assert.match(normalizeShareTargetOption, /typeof file !== "object"/, 'share target normalization should ignore non-object items');
 const normalizeShareTargetOptionForTest = compileNavFunction('normalizeShareTargetOption', [
+  'looksLikeFileName',
+  'resolveShareTargetPath',
   'isShareDirectoryTarget',
   'joinSharePath',
   'formatShareTarget',
@@ -164,6 +166,11 @@ assert.equal(
   'file',
   'share target normalization should keep regular files as file shares'
 );
+assert.equal(
+  normalizeShareTargetOptionForTest({ name: 'a.jpg', id: '电脑壁纸/a.jpg' }).targetPath,
+  '电脑壁纸/a.jpg',
+  'share target normalization should prefer full file ids over display names'
+);
 const findDashboardProxy = extractFunctionBody(navHotfix, 'findDashboardProxy');
 assert.match(findDashboardProxy, /isDashboardProxyCandidate/, 'dashboard proxy lookup should accept the real dashboard state shape');
 assert.match(findDashboardProxy, /dashboardProxyCache/, 'dashboard proxy lookup should reuse a short-lived cache to avoid repeated full DOM scans');
@@ -185,6 +192,12 @@ assert.match(promptShareExpiryOnly, /editShareExpiry/, 'share manager should off
 assert.match(promptShareExpiryOnly, /data-share-expiry-action="confirm"/, 'share expiry edit modal should include a confirm action');
 const renderCreatedShare = extractFunctionBody(navHotfix, 'renderCreatedShare');
 assert.match(createShareForCurrentTarget, /rememberShareUrl\(data\.share, data\.url\)/, 'newly created share URLs should be cached locally for management actions');
+const shareUrlForTest = compileNavFunction('shareUrlFor');
+assert.equal(
+  shareUrlForTest({ id: 'share_1', url: 'https://img.example/share/token' }),
+  'https://img.example/share/token',
+  'share manager copy/open actions should prefer URLs returned by the management API'
+);
 const openShareManager = extractFunctionBody(navHotfix, 'openShareManager');
 assert.match(openShareManager, /apiJson\("\/api\/manage\/share\?limit=100"/, 'share manager should load active share records by default');
 assert.doesNotMatch(openShareManager, /includeRevoked=true/, 'share manager should not show revoked shares by default');

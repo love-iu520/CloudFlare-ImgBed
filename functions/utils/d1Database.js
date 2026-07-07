@@ -409,13 +409,14 @@ D1Database.prototype.list = function(options) {
 D1Database.prototype.putShareLink = function(share) {
     var stmt = this.db.prepare(
         'INSERT OR REPLACE INTO share_links (' +
-        'id, token_hash, token_prefix, target_type, target_path, expires_at, revoked_at, ' +
+        'id, token, token_hash, token_prefix, target_type, target_path, expires_at, revoked_at, ' +
         'created_at_ms, updated_at_ms, view_count, last_viewed_at' +
-        ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ') VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
 
     return stmt.bind(
         share.id,
+        share.token || null,
         share.tokenHash,
         share.tokenPrefix,
         share.targetType,
@@ -497,6 +498,7 @@ function rowToShareLink(row) {
     if (!row) return null;
     return {
         id: row.id,
+        token: row.token,
         tokenHash: row.token_hash,
         tokenPrefix: row.token_prefix,
         targetType: row.target_type,
