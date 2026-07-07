@@ -257,6 +257,38 @@ describe('share links', () => {
     assert.equal(revokedPublicResponse.status, 410);
   });
 
+  it('resolves file shares created from displayed file names to real file ids', async () => {
+    const env = createEnv();
+    await seedFile(env, 'photos/internal-id.png', {
+      FileName: 'Wallpaper.png',
+      Directory: 'photos/',
+    });
+
+    const createResponse = await manageShareRequest({
+      env,
+      request: jsonRequest('https://img.example/api/manage/share', {
+        targetType: 'file',
+        targetPath: 'photos/Wallpaper.png',
+        expiresInSeconds: 604800,
+      }),
+    });
+    assert.equal(createResponse.status, 201);
+
+    const created = await createResponse.json();
+    assert.equal(created.success, true);
+    assert.equal(created.share.targetPath, 'photos/internal-id.png');
+
+    const token = created.url.split('/share/')[1];
+    const publicResponse = await publicShareRequest({
+      env,
+      request: new Request(`https://img.example/api/share/${token}`),
+      params: { path: token },
+    });
+    assert.equal(publicResponse.status, 200);
+    const publicBody = await publicResponse.json();
+    assert.equal(publicBody.file.name, 'photos/internal-id.png');
+  });
+
   it('lists shared directory children with relative paths for navigation', async () => {
     const env = createEnv();
     await seedFile(env, 'photos/root.jpg');

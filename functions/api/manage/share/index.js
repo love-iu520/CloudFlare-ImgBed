@@ -3,6 +3,8 @@ import {
     canShareAccessMetadata,
     createShareLink,
     listShareLinks,
+    normalizeDirectoryPath,
+    normalizeFilePath,
     normalizeShareTarget,
     revokeShareLink,
     updateShareExpiry,
@@ -56,10 +58,10 @@ export async function onRequest(context) {
 async function createShare(context) {
     const { request, env } = context;
     const body = await parseJsonBody(request);
-    const target = normalizeShareTarget(body.targetType, body.targetPath);
+    const requestedTarget = normalizeShareTarget(body.targetType, body.targetPath);
     const url = new URL(request.url);
 
-    await assertShareTargetAllowed(env, target);
+    const target = await assertShareTargetAllowed(env, requestedTarget);
 
     const result = await createShareLink(env, {
         targetType: target.targetType,
@@ -145,18 +147,98 @@ export async function revokeShare(env, id) {
 
 async function assertShareTargetAllowed(env, target) {
     if (target.targetType === 'directory') {
-        return;
+        return target;
     }
 
     const db = getDatabase(env);
-    const record = await db.getWithMetadata(target.targetPath);
-    if (!record || !record.metadata) {
+    const resolved = await resolveShareFileTarget(db, target.targetPath);
+    if (!resolved || !resolved.record || !resolved.record.metadata) {
         throw httpError(404, 'Target file not found');
     }
 
-    if (!canShareAccessMetadata(record.metadata)) {
+    if (!canShareAccessMetadata(resolved.record.metadata)) {
         throw httpError(400, 'Target file cannot be shared');
     }
+
+    return {
+        ...target,
+        targetPath: resolved.fileId,
+    };
+}
+
+async function resolveShareFileTarget(db, targetPath) {
+    const normalizedPath = normalizeFilePath(targetPath);
+    const exactRecord = await db.getWithMetadata(normalizedPath);
+    if (exactRecord && exactRecord.metadata) {
+        return {
+            fileId: normalizedPath,
+            record: exactRecord,
+        };
+    }
+
+    return await findFileByDisplayedPath(db, normalizedPath);
+}
+
+async function findFileByDisplayedPath(db, targetPath) {
+    const normalizedPath = normalizeFilePath(targetPath);
+    const targetFileName = basename(normalizedPath);
+    const targetDirectory = normalizeDirectoryPath(dirname(normalizedPath));
+    if (!targetFileName) return null;
+
+    const byDirectory = await findFileByDisplayedPathWithPrefix(db, targetDirectory, targetDirectory, targetFileName);
+    if (byDirectory) return byDirectory;
+
+    if (targetDirectory) {
+        return await findFileByDisplayedPathWithPrefix(db, '', targetDirectory, targetFileName);
+    }
+
+    return null;
+}
+
+async function findFileByDisplayedPathWithPrefix(db, prefix, targetDirectory, targetFileName) {
+    let cursor = undefined;
+
+    while (true) {
+        const result = await db.list({
+            prefix,
+            limit: 1000,
+            cursor,
+        });
+
+        for (const item of result.keys || []) {
+            if (item.name.startsWith('manage@') || item.name.startsWith('chunk_')) continue;
+            if (!item.metadata) continue;
+
+            const itemDirectory = normalizeDirectoryPath(item.metadata.Directory || dirname(item.name));
+            const itemFileName = item.metadata.FileName || basename(item.name);
+            if (itemDirectory === targetDirectory && itemFileName === targetFileName) {
+                return {
+                    fileId: item.name,
+                    record: {
+                        value: item.value,
+                        metadata: item.metadata,
+                    },
+                };
+            }
+        }
+
+        cursor = result.cursor;
+        if (!cursor || result.list_complete) break;
+    }
+
+    return null;
+}
+
+function dirname(path) {
+    const value = normalizeFilePath(path);
+    const index = value.lastIndexOf('/');
+    return index === -1 ? '' : value.slice(0, index + 1);
+}
+
+function basename(path) {
+    const value = normalizeFilePath(path);
+    const index = value.lastIndexOf('/');
+    return index === -1 ? value : value.slice(index + 1);
 }
 
 async function parseJsonBody(request) {
