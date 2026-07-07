@@ -33,6 +33,8 @@
       shareTarget: "分享目标",
       shareFile: "文件",
       shareDirectory: "目录",
+      shareCollection: "集合",
+      shareItems: "项",
       shareExpires: "有效期",
       shareOneHour: "1 小时",
       shareOneDay: "1 天",
@@ -114,6 +116,8 @@
       shareTarget: "Share target",
       shareFile: "File",
       shareDirectory: "Directory",
+      shareCollection: "Collection",
+      shareItems: "items",
       shareExpires: "Expires",
       shareOneHour: "1 hour",
       shareOneDay: "1 day",
@@ -1720,6 +1724,7 @@
         content += '<div class="cfib-share-row is-' + escapeHtml(status.key) + '">' +
           '<div class="cfib-share-row-main">' +
           '<strong>' + escapeHtml(formatShareTarget(share)) + '</strong>' +
+          renderShareTargetList(share) +
           '<span>' + escapeHtml(text("shareTokenPrefix")) + ': ' + escapeHtml(share.tokenPrefix || "-") + '</span>' +
           (!shareUrl ? '<span class="cfib-share-url-note">' + escapeHtml(text("shareUrlUnavailable")) + '</span>' : '') +
           '</div>' +
@@ -1888,8 +1893,34 @@
   }
 
   function formatShareTarget(target) {
+    var items = shareDisplayItems(target);
+    if (items.length > 1) {
+      return text("shareCollection") + " " + items.length + " " + text("shareItems");
+    }
     var prefix = target.targetType === "directory" ? text("shareDirectory") : text("shareFile");
     return prefix + " " + (target.targetPath || "/");
+  }
+
+  function shareDisplayItems(share) {
+    if (share && Array.isArray(share.items) && share.items.length) {
+      return share.items.map(function (item) {
+        return {
+          targetType: item.itemType || item.targetType,
+          targetPath: item.itemPath || item.targetPath
+        };
+      }).filter(function (item) {
+        return item.targetType === "file" || item.targetType === "directory";
+      });
+    }
+    return share ? [share] : [];
+  }
+
+  function renderShareTargetList(share) {
+    var items = shareDisplayItems(share);
+    if (items.length <= 1) return "";
+    return '<div class="cfib-share-item-list">' + items.map(function (item) {
+      return '<span class="cfib-share-item">' + escapeHtml(formatShareTarget(item)) + '</span>';
+    }).join("") + '</div>';
   }
 
   function formatShareExpiry(share) {

@@ -147,6 +147,7 @@ const normalizeShareTargetOptionForTest = compileNavFunction('normalizeShareTarg
   'resolveShareTargetPath',
   'isShareDirectoryTarget',
   'joinSharePath',
+  'shareDisplayItems',
   'formatShareTarget',
 ]);
 assert.equal(
@@ -226,6 +227,13 @@ assert.match(renderShareManager, /data-share-action="copy"/, 'share manager rows
 assert.match(renderShareManager, /data-share-action="open"/, 'share manager rows should expose open actions');
 assert.match(renderShareManager, /data-share-action="editExpiry"/, 'share manager rows should expose expiry edit actions');
 assert.match(renderShareManager, /shareUrlUnavailable/, 'share manager should explain why old records cannot expose full URLs');
+assert.match(renderShareManager, /renderShareTargetList\(share\)/, 'share manager should show all targets for collection shares');
+const formatShareTarget = extractFunctionBody(navHotfix, 'formatShareTarget');
+assert.match(formatShareTarget, /shareDisplayItems\(target\)/, 'share target labels should detect multi-target shares');
+assert.match(formatShareTarget, /shareCollection/, 'multi-target shares should be labeled as a collection');
+const renderShareTargetList = extractFunctionBody(navHotfix, 'renderShareTargetList');
+assert.match(renderShareTargetList, /shareDisplayItems\(share\)/, 'share manager target list should render share items');
+assert.match(renderShareTargetList, /cfib-share-item/, 'share manager target list should use item chips');
 const updateShareExpiryFromManager = extractFunctionBody(navHotfix, 'updateShareExpiryFromManager');
 assert.match(updateShareExpiryFromManager, /method: "PATCH"/, 'share manager should update expiry through the API');
 const revokeShareFromManager = extractFunctionBody(navHotfix, 'revokeShareFromManager');
@@ -289,6 +297,8 @@ assert.match(css, /\.cfib-share-result/, 'share result modal should have styles'
 assert.match(css, /\.cfib-primary-link/, 'share result should style the open link as a primary action');
 assert.match(css, /\.cfib-share-target-list/, 'share creation modal should have a target list layout');
 assert.match(css, /\.cfib-share-target-item/, 'share creation modal should have target item styles');
+assert.match(css, /\.cfib-share-item-list/, 'share manager should have a multi-target list layout');
+assert.match(css, /\.cfib-share-item/, 'share manager should have multi-target item styles');
 assert.match(css, /\.cfib-share-list/, 'share manager should have list layout styles');
 assert.match(css, /\.cfib-share-row/, 'share manager should have row layout styles');
 assert.doesNotMatch(css, /quick-toolbar\[data-v-060c1790\]\s*\{[^}]*opacity:\s*0/, 'upload page quick toolbar should not be hidden by the nav hotfix');

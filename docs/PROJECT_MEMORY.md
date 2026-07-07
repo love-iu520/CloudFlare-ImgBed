@@ -5,8 +5,9 @@
 ## 当前任务入口
 
 - 项目是文件托管服务，不是纯静态前端项目。
-- 常见任务主要分为：Functions API 维护、存储渠道维护、鉴权与分享访问控制、部署适配、数据库迁移、静态前端热修复。
-- 当前仓库没有完整前端源码；对界面做小修时通常只能改 `frontend-dist` 中的热修复文件，或者回到外部前端项目处理。
+- 常见任务主要分为：Functions API 维护、存储渠道维护、鉴权与分享访问控制、部署适配、数据库迁移、前端源码维护和静态前端产物同步。
+- 当前仓库没有完整前端源码；完整前端源码在相邻仓库 `D:\Dev\Projects\Practice\Sanyue-ImgHub`。
+- 对界面和交互做长期修改时，优先改 `Sanyue-ImgHub/src` 或 `Sanyue-ImgHub/public`，再构建并同步 `dist` 到本仓库 `frontend-dist`。
 - 如果任务涉及长期规则、部署方式、数据库结构、核心访问控制、重要目录或验证方式，结束前检查是否需要更新 `docs/CONTEXT.md` 和本文件。
 
 ## 近期重要记忆
@@ -14,6 +15,7 @@
 - 2026-07-06：新增项目级 `AGENTS.md`、`docs/CONTEXT.md` 和 `docs/PROJECT_MEMORY.md`，用于让后续任务保留项目上下文。
 - 2026-07-06：最新提交脉络集中在分享功能和管理导航，包括分享目标选择、分享管理、分享按钮 fallback、过期分享链接、新建文件夹、回收站批量操作和删除确认弹窗。
 - 2026-07-07：分享链接升级为 `share_links` + `share_link_items` 两层模型；新建分享可以用 `targets` 数组让一个 token 包含多个文件和目录。
+- 2026-07-07：本机已下载前端源码仓库 `D:\Dev\Projects\Practice\Sanyue-ImgHub`；导航热修复已迁移到该仓库 `public/js/nav-hotfix.js` 和 `public/css/nav-hotfix.css`，由前端 build 带入 `dist`。
 - 当前 `package.json` 版本为 `2.7.4`；仓库中已存在 `database/migrations/v2.7.5_add_share_links.sql`，不要仅凭 package 版本判断迁移是否不存在。
 - `frontend-dist` 从 README 的 v2.7.1 公告开始是 Cloudflare Pages 构建输出目录。
 
@@ -26,6 +28,8 @@
 - `data` 是本地数据库和 R2 模拟数据目录，`.wrangler` 是 Wrangler 状态目录，二者都不应作为项目事实提交。
 - `npm start` 和 `npm run start:docker` 都默认占用 `8080` 端口；启动服务后要在最终回复说明地址和服务状态。
 - Docker/Node.js 模式依赖可选依赖 `hono`、`@hono/node-server`、`better-sqlite3`；如果只安装了 Worker 部署所需依赖，Docker 模式可能无法启动。
+- 本地前后端联调：本仓库运行 `npm start` 提供后端和部署产物服务，默认 `8080`；`Sanyue-ImgHub` 运行 `npm run serve` 提供前端开发服务，默认 `3000`。
+- `Sanyue-ImgHub/.env.development` 指向 `VUE_APP_BACKEND_URL=http://127.0.0.1:8080`；如果前端 API 代理 404，优先检查 `vue.config.js` 的 `devServer.proxy` 和 `pathRewrite`。
 
 ## 业务规则记忆
 
@@ -53,9 +57,12 @@
 ## 前端热修复记忆
 
 - `frontend-dist/js/nav-hotfix.js` 和 `frontend-dist/css/nav-hotfix.css` 有对应 gzip 文件。
-- 修改导航热修复时，同步更新 `.gz` 文件，并运行 `npx mocha test\nav-hotfix-static.test.js`。
+- 导航热修复源码现在维护在 `D:\Dev\Projects\Practice\Sanyue-ImgHub\public\js\nav-hotfix.js` 和 `D:\Dev\Projects\Practice\Sanyue-ImgHub\public\css\nav-hotfix.css`；`Sanyue-ImgHub/public/index.html` 会引用它们。
+- 修改导航热修复的优先路径是改 `Sanyue-ImgHub/public`，运行 `npm run build` 后把 `dist` 同步到本仓库 `frontend-dist`；如果直接修改 `frontend-dist`，必须同步更新 `.gz` 文件。
+- 修改导航热修复后运行 `npx mocha test\nav-hotfix-static.test.js`。
 - 现有导航热修复测试通过源码字符串静态断言管理导航、回收站、分享管理、新建文件夹、Telegram 导入和上传页布局，不会启动浏览器。
 - 不要对 `frontend-dist` 做全目录格式化或重新构建，除非用户明确要求并接受大范围产物变更。
+- 若 `Sanyue-ImgHub/dist` 生成的 hash 文件与本仓库 `frontend-dist` 大量不同，先确认是否真的需要全量同步，避免无关产物抖动。
 
 ## 验证记忆
 
@@ -64,6 +71,8 @@
 - 分享链接：`npx mocha test\share-links.test.js`。
 - 元数据辅助：`npx mocha test\metadata-helpers.test.js`。
 - 导航热修复：`npx mocha test\nav-hotfix-static.test.js`。
+- 前端源码：在 `D:\Dev\Projects\Practice\Sanyue-ImgHub` 运行 `npm run build`；构建成功但可能有既有 CSS order 或体积 warning。
+- 前端构建产物同步后：按改动内容在本仓库运行 `git diff --check`、导航热修复静态测试或相关集成测试。
 - 本地 Pages Functions 集成：`npm run ci-test`，会启动 `npm start` 并等待 `http://localhost:8080`。
 - Docker/Node.js 集成：`npm run ci-test:docker`，会启动 `npm run start:docker` 并等待 `http://localhost:8080`。
 

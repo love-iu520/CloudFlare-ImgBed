@@ -8,7 +8,7 @@
 - 项目支持上传、读取、管理、删除、目录、图片审查、随机图、公共图库、分享链接、WebDAV 和 RESTful API。
 - 支持多种部署形态：Cloudflare Pages Functions、Cloudflare Workers、Docker/Node.js。
 - 支持多种存储渠道：Telegram、Discord、Cloudflare R2、S3、Hugging Face、WebDAV 和外链记录。
-- 仓库内包含 `frontend-dist` 静态前端产物，不包含完整前端源码；README 指向外部前端项目 `MarSeventh/Sanyue-ImgHub`。
+- 仓库内包含 `frontend-dist` 静态前端产物，不包含完整前端源码；README 指向外部前端项目 `MarSeventh/Sanyue-ImgHub`，本机前端源码仓库位于 `D:\Dev\Projects\Practice\Sanyue-ImgHub`。
 
 ## 技术栈与运行方式
 
@@ -16,6 +16,8 @@
 - 运行环境：Dockerfile 和 GitHub Actions 使用 Node.js 22。
 - 模块系统：`package.json` 设置 `"type": "module"`，代码以 ES Modules 为主。
 - Cloudflare 本地开发：`npm start` 使用 `wrangler pages dev ./frontend-dist --kv "img_url" --r2 "img_r2" --port 8080 --persist-to ./data`。
+- 前端源码本地开发：在 `D:\Dev\Projects\Practice\Sanyue-ImgHub` 运行 `npm run serve`，默认监听 `3000`，`.env.development` 指向后端 `http://127.0.0.1:8080`。
+- 前端源码构建：在 `D:\Dev\Projects\Practice\Sanyue-ImgHub` 运行 `npm run build`，输出 `dist`，确认后同步到本仓库 `frontend-dist`。
 - Docker/Node.js 模式：`npm run start:docker` 使用 `deploy/server/index.js`，通过 Hono 模拟 Pages Functions 路由，用 SQLite 模拟 D1，用本地文件系统模拟 R2。
 - Worker 部署：`npm run deploy:worker` 先运行 `deploy/worker/generate-routes.js`，再使用 `wrangler deploy --config deploy/worker/wrangler.toml`。
 - 测试框架：Mocha，默认命令为 `npm test`。
@@ -30,6 +32,7 @@
 - `functions/random`：随机文件访问入口。
 - `functions/utils`：数据库适配、系统配置、鉴权、索引、缓存清理、元数据、分享链接和各存储渠道客户端。
 - `frontend-dist`：静态 SPA 产物，包含 `index.html`、CSS、JS、图片、字体和 gzip 文件。
+- `D:\Dev\Projects\Practice\Sanyue-ImgHub`：相邻前端源码仓库，包含 Vue 源码、前端 `public` 静态文件和构建输出 `dist`。
 - `deploy/server`：Docker/Node.js 运行时适配层，包含 Hono 服务、SQLite D1 模拟和本地 R2 模拟。
 - `deploy/worker`：Workers 部署适配层、路由生成脚本和 wrangler 配置生成脚本。
 - `database`：D1/SQLite 初始化 SQL 和迁移脚本。
@@ -88,6 +91,7 @@
 ## 部署与自动化
 
 - Cloudflare Pages 用户需把构建输出目录配置为 `frontend-dist`。
+- 前端源码修改后，应先在 `Sanyue-ImgHub` 构建并检查 `dist`，再同步到本仓库 `frontend-dist` 用于 Pages、Workers 或 Docker/Node.js 部署。
 - Worker 配置模板在 `deploy/worker/wrangler.toml`，GitHub Actions 可通过 Secrets 运行 `deploy/worker/generate-toml.js` 动态生成配置。
 - `.github/workflows/deploy-worker.yml` 只在 fork 仓库且配置 Cloudflare Secrets 时部署 Worker。
 - `.github/workflows/docker-publish.yml` 仅在原仓库 `MarSeventh/CloudFlare-ImgBed` 构建并推送 Docker 镜像。
@@ -103,6 +107,8 @@
 
 - `deploy/worker/index.js` 文件头明确标注自动生成；修改 Workers 路由时优先修改 `functions/` 或 `deploy/worker/generate-routes.js`。
 - `frontend-dist` 是静态产物目录，修改其中 JS/CSS 时要避免无关产物抖动，并保持 `.gz` 文件同步。
+- 长期前端功能不要直接写进 `frontend-dist`；应修改相邻前端源码仓库 `Sanyue-ImgHub` 中的 `src` 或 `public`，构建后再同步产物。
+- 导航热修复源码已迁移到 `Sanyue-ImgHub/public/js/nav-hotfix.js` 和 `Sanyue-ImgHub/public/css/nav-hotfix.css`，`public/index.html` 会在构建时引用它们并产出到 `dist/js`、`dist/css`。
 - 当前仓库没有 `src` 目录；不要把外部前端源码约定误写成本仓库事实。
 - `.gitignore` 忽略 `data`、`.wrangler`、SQLite 文件、`node_modules` 和若干本地 IDE/Agent 目录。
 - 数据库配置可使用 KV `img_url` 或 D1 `img_d1`；修改适配层时要同时确认 Pages、Workers 和 Docker/SQLite 三种运行模式。
@@ -118,6 +124,7 @@
 - 分享链接修改：`npx mocha test\share-links.test.js`。
 - 元数据、来源组、回收站、文件夹占位符修改：`npx mocha test\metadata-helpers.test.js`。
 - 导航热修复修改：`npx mocha test\nav-hotfix-static.test.js`。
+- 前端源码修改：在 `D:\Dev\Projects\Practice\Sanyue-ImgHub` 运行 `npm run build`；若同步了 `frontend-dist`，再按影响范围运行本仓库静态测试或集成测试。
 - 新增、删除或移动 Functions 路由：`node deploy\worker\generate-routes.js`，然后检查 `deploy/worker/index.js` diff。
 - 跨运行时改动：按影响范围运行 `npm run ci-test` 或 `npm run ci-test:docker`。
 

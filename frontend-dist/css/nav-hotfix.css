@@ -707,18 +707,38 @@
   min-width: 0;
 }
 
-.cfib-share-row-main strong,
-.cfib-share-row-main span {
+.cfib-share-row-main > strong,
+.cfib-share-row-main > span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.cfib-share-row-main span,
+.cfib-share-row-main > span,
 .cfib-share-row-meta {
   color: var(--el-text-color-secondary, #64748b);
   font-size: 12px;
+}
+
+.cfib-share-item-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cfib-share-item {
+  display: inline-flex;
+  max-width: 100%;
+  padding: 4px 8px;
+  border: 1px solid rgba(148, 163, 184, .28);
+  border-radius: 6px;
+  background: var(--el-fill-color-light, #f8fafc);
+  color: var(--el-text-color-regular, #334155);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .cfib-share-row-meta {
