@@ -656,6 +656,17 @@
   overflow: auto;
 }
 
+.cfib-share-select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  min-height: 28px;
+  color: var(--el-text-color-secondary, #64748b);
+  font-size: 13px;
+  cursor: pointer;
+}
+
 .cfib-share-target-item {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

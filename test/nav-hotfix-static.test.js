@@ -129,6 +129,8 @@ assert.doesNotMatch(createShareForCurrentTarget, /dashboardUnavailable/, 'share 
 assert.match(createShareForCurrentTarget, /collectShareTargetOptions\(proxy\)/, 'share action should collect selectable file and directory targets');
 assert.match(createShareForCurrentTarget, /targets:\s*result\.targets\.map/, 'share action should submit all targets chosen in the modal');
 assert.match(createShareForCurrentTarget, /JSON\.stringify\(body\)/, 'share action should send a JSON body with the selected targets');
+assert.match(createShareForCurrentTarget, /copyText\(data\.url \|\| ""\)/, 'share action should copy newly created links automatically');
+assert.doesNotMatch(createShareForCurrentTarget, /renderCreatedShare\(data\.url, data\.share\)/, 'share action should not interrupt creation with a result modal');
 const resolveShareTarget = extractFunctionBody(navHotfix, 'resolveShareTarget');
 assert.match(resolveShareTarget, /proxy\.selectedFiles/, 'share target should prefer a selected file or folder');
 assert.match(resolveShareTarget, /proxy\.currentPath/, 'share target should fall back to the current directory');
@@ -139,6 +141,8 @@ assert.match(collectShareTargetOptions, /collectDomShareTargetOptions/, 'share t
 assert.match(collectShareTargetOptions, /findDashboardPathFromDom/, 'share target options should fall back to the breadcrumb path');
 assert.match(collectShareTargetOptions, /preferredInsertIndex/, 'selected share targets should keep their order ahead of fallback directory targets');
 assert.match(collectShareTargetOptions, /withShareBasePath\(file, currentBasePath\)/, 'selected share targets should keep the current folder path');
+assert.match(collectShareTargetOptions, /target\.__preferred = preferred === true/, 'preferred share targets should be marked for default selection');
+assert.match(collectShareTargetOptions, /__shareCurrentDirectory/, 'current directory fallback should be distinguishable from selected files');
 const normalizeShareTargetOption = extractFunctionBody(navHotfix, 'normalizeShareTargetOption');
 assert.match(normalizeShareTargetOption, /!file/, 'share target normalization should ignore nullish items');
 assert.match(normalizeShareTargetOption, /typeof file !== "object"/, 'share target normalization should ignore non-object items');
@@ -202,7 +206,10 @@ assert.match(shareItemFromDomNode, /withShareBasePath\(row, findDashboardPathFro
 const promptShareExpiry = extractFunctionBody(navHotfix, 'promptShareExpiry');
 assert.match(promptShareExpiry, /cfib-share-target-list/, 'share creation modal should show the selected share targets');
 assert.match(promptShareExpiry, /type="checkbox"/, 'share creation modal should allow removing individual selected targets');
+assert.match(promptShareExpiry, /data-share-select-all/, 'share creation modal should include a select-all checkbox');
+assert.match(promptShareExpiry, /syncSelectAllState/, 'share creation modal should keep select-all state in sync');
 assert.match(promptShareExpiry, /data-share-target-index/, 'share creation modal should map checked rows back to target options');
+assert.match(promptShareExpiry, /var target = options/, 'share creation modal should submit from the full visible target list');
 assert.match(promptShareExpiry, /targets:\s*targets/, 'share creation modal should resolve with a target array');
 assert.match(promptShareExpiry, /data-share-action="confirm"/, 'share creation modal should include a visible confirm button');
 assert.match(promptShareExpiry, /event\.key === "Enter"/, 'share creation modal should allow Enter to confirm the selected expiry');
@@ -296,6 +303,7 @@ assert.match(css, /\.cfib-folder-input/, 'new folder modal should have input sty
 assert.match(css, /\.cfib-share-result/, 'share result modal should have styles');
 assert.match(css, /\.cfib-primary-link/, 'share result should style the open link as a primary action');
 assert.match(css, /\.cfib-share-target-list/, 'share creation modal should have a target list layout');
+assert.match(css, /\.cfib-share-select-all/, 'share creation modal should have select-all styles');
 assert.match(css, /\.cfib-share-target-item/, 'share creation modal should have target item styles');
 assert.match(css, /\.cfib-share-item-list/, 'share manager should have a multi-target list layout');
 assert.match(css, /\.cfib-share-item/, 'share manager should have multi-target item styles');

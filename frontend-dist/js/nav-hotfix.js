@@ -31,6 +31,7 @@
       shareManage: "分享管理",
       shareTitle: "创建分享链接",
       shareTarget: "分享目标",
+      shareSelectAll: "全选",
       shareFile: "文件",
       shareDirectory: "目录",
       shareCollection: "集合",
@@ -114,6 +115,7 @@
       shareManage: "Share Manager",
       shareTitle: "Create Share Link",
       shareTarget: "Share target",
+      shareSelectAll: "Select all",
       shareFile: "File",
       shareDirectory: "Directory",
       shareCollection: "Collection",
@@ -1152,7 +1154,7 @@
       })
         .then(function (data) {
           rememberShareUrl(data.share, data.url);
-          renderCreatedShare(data.url, data.share);
+          copyText(data.url || "");
         })
         .catch(function (error) {
           showToast(error.message || String(error), "error");
@@ -1173,6 +1175,8 @@
       if (!file) return;
       var target = file.targetType ? file : normalizeShareTargetOption(file);
       if (!target) return;
+      target.__preferred = preferred === true;
+      if (file.__shareCurrentDirectory) target.__shareCurrentDirectory = true;
       var key = target.targetType + ":" + target.targetPath;
       if (seen[key]) return;
       seen[key] = true;
@@ -1205,7 +1209,8 @@
 
     addTarget({
       isFolder: true,
-      name: currentBasePath
+      name: currentBasePath,
+      __shareCurrentDirectory: true
     }, selected.length === 0 && !hasPreferredDomTarget);
 
     domOptions.filter(function (target) {
@@ -1377,7 +1382,7 @@
     var options = [];
     var root = document.querySelector(".main-container") || document.querySelector(".container") || document;
     var selectedNodes = root.querySelectorAll(
-      ".img-card .el-checkbox__input.is-checked, .file-card .el-checkbox__input.is-checked, .content .el-checkbox__input.is-checked, .img-card .el-checkbox.is-checked, .file-card .el-checkbox.is-checked, .content .el-checkbox.is-checked, .img-card input[type='checkbox']:checked, .file-card input[type='checkbox']:checked, .content input[type='checkbox']:checked, .img-card [aria-checked='true'], .file-card [aria-checked='true'], .content [aria-checked='true'], .img-card.is-selected, .file-card.is-selected, .list-item.is-selected, .img-card.selected, .file-card.selected, .list-item.selected, .img-card .checked, .file-card .checked, .list-item .dashboard-checkbox.checked, .list-item .dashboard-checkbox[aria-checked='true']"
+      ".img-card .el-checkbox__input.is-checked, .file-card .el-checkbox__input.is-checked, .content .el-checkbox__input.is-checked, .img-card .el-checkbox.is-checked, .file-card .el-checkbox.is-checked, .content .el-checkbox.is-checked, .img-card input[type='checkbox']:checked, .file-card input[type='checkbox']:checked, .content input[type='checkbox']:checked, .img-card [role='checkbox'][aria-checked='true'], .file-card [role='checkbox'][aria-checked='true'], .content [role='checkbox'][aria-checked='true'], .img-card.is-selected, .file-card.is-selected, .list-item.is-selected, .img-card.selected, .file-card.selected, .list-item.selected, .list-item .dashboard-checkbox.checked, .list-item .dashboard-checkbox[aria-checked='true']"
     );
     selectedNodes.forEach(function (node) {
       var item = shareItemFromVueNode(node) || shareItemFromDomNode(node, rows);
@@ -1470,12 +1475,16 @@
       var hasPreferredTargets = options.some(function (target) {
         return target.__preferred;
       });
-      var selectedOptions = hasPreferredTargets ? options.filter(function (target) {
+      var preferredTargets = options.filter(function (target) {
         return target.__preferred;
-      }) : options;
-      var targetOptionsHtml = selectedOptions.map(function (target, index) {
+      });
+      var defaultCurrentDirectoryOnly = preferredTargets.length === 1 && preferredTargets[0].__shareCurrentDirectory;
+      var targetOptionsHtml = options.map(function (target, index) {
+        var checked = hasPreferredTargets
+          ? target.__preferred && (!target.__shareCurrentDirectory || defaultCurrentDirectoryOnly)
+          : index === 0;
         return '<label class="cfib-share-target-item">' +
-          '<input type="checkbox" data-share-target-index="' + index + '" checked>' +
+          '<input type="checkbox" data-share-target-index="' + index + '"' + (checked ? " checked" : "") + '>' +
           '<span>' + escapeHtml(target.label || formatShareTarget(target)) + '</span>' +
           '</label>';
       }).join("");
@@ -1487,6 +1496,10 @@
         '<h3 class="cfib-confirm-title">' + escapeHtml(text("shareTitle")) + '</h3>' +
         '<div class="cfib-folder-field">' +
         '<span>' + escapeHtml(text("shareTarget")) + '</span>' +
+        '<label class="cfib-share-select-all">' +
+        '<input type="checkbox" data-share-select-all="true">' +
+        '<span>' + escapeHtml(text("shareSelectAll")) + '</span>' +
+        '</label>' +
         '<div class="cfib-share-target-list" data-share-target-list="true">' +
         targetOptionsHtml +
         '</div>' +
@@ -1522,7 +1535,7 @@
         var targets = [];
         confirmModal.querySelectorAll("[data-share-target-index]:checked").forEach(function (inputNode) {
           var targetIndex = Number(inputNode.getAttribute("data-share-target-index"));
-          var target = selectedOptions[Number.isFinite(targetIndex) ? targetIndex : 0];
+          var target = options[Number.isFinite(targetIndex) ? targetIndex : 0];
           if (target) {
             targets.push({
               targetType: target.targetType,
@@ -1542,6 +1555,30 @@
         });
       });
 
+      function syncSelectAllState() {
+        var selectAll = confirmModal.querySelector("[data-share-select-all]");
+        if (!selectAll) return;
+        var targetInputs = Array.prototype.slice.call(confirmModal.querySelectorAll("[data-share-target-index]"));
+        var checkedCount = targetInputs.filter(function (inputNode) { return inputNode.checked; }).length;
+        selectAll.checked = targetInputs.length > 0 && checkedCount === targetInputs.length;
+        selectAll.indeterminate = checkedCount > 0 && checkedCount < targetInputs.length;
+      }
+
+      confirmModal.addEventListener("change", function (event) {
+        var inputNode = event.target;
+        if (!inputNode || !inputNode.matches) return;
+        if (inputNode.matches("[data-share-select-all]")) {
+          confirmModal.querySelectorAll("[data-share-target-index]").forEach(function (targetInput) {
+            targetInput.checked = inputNode.checked;
+          });
+          syncSelectAllState();
+          return;
+        }
+        if (inputNode.matches("[data-share-target-index]")) {
+          syncSelectAllState();
+        }
+      });
+
       confirmModal.addEventListener("keydown", function (event) {
         if (event.key === "Escape") finish(false);
         if (event.key === "Enter") {
@@ -1551,6 +1588,7 @@
       });
 
       document.body.appendChild(confirmModal);
+      syncSelectAllState();
       var firstTarget = confirmModal.querySelector("[data-share-target-index]");
       if (firstTarget) firstTarget.focus();
     });
