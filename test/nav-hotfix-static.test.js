@@ -136,6 +136,8 @@ assert.match(collectShareTargetOptions, /proxy\.selectedFiles/, 'share target op
 assert.match(collectShareTargetOptions, /proxy\.paginatedTableData/, 'share target options should include visible dashboard rows');
 assert.match(collectShareTargetOptions, /collectDomShareTargetOptions/, 'share target options should fall back to visible dashboard DOM rows');
 assert.match(collectShareTargetOptions, /findDashboardPathFromDom/, 'share target options should fall back to the breadcrumb path');
+assert.match(collectShareTargetOptions, /preferredInsertIndex/, 'selected share targets should keep their order ahead of fallback directory targets');
+assert.match(collectShareTargetOptions, /withShareBasePath\(file, currentBasePath\)/, 'selected share targets should keep the current folder path');
 const normalizeShareTargetOption = extractFunctionBody(navHotfix, 'normalizeShareTargetOption');
 assert.match(normalizeShareTargetOption, /!file/, 'share target normalization should ignore nullish items');
 assert.match(normalizeShareTargetOption, /typeof file !== "object"/, 'share target normalization should ignore non-object items');
@@ -171,17 +173,30 @@ assert.equal(
   '电脑壁纸/a.jpg',
   'share target normalization should prefer full file ids over display names'
 );
+assert.equal(
+  normalizeShareTargetOptionForTest({ name: 'a.jpg', __shareBasePath: '电脑壁纸/' }).targetPath,
+  '电脑壁纸/a.jpg',
+  'share target normalization should keep selected file names inside the current folder'
+);
+assert.equal(
+  normalizeShareTargetOptionForTest({ name: '手机壁纸', isFolder: true, __shareBasePath: '壁纸/' }).targetPath,
+  '壁纸/手机壁纸',
+  'share target normalization should keep selected folders inside the current folder'
+);
 const findDashboardProxy = extractFunctionBody(navHotfix, 'findDashboardProxy');
 assert.match(findDashboardProxy, /isDashboardProxyCandidate/, 'dashboard proxy lookup should accept the real dashboard state shape');
 assert.match(findDashboardProxy, /dashboardProxyCache/, 'dashboard proxy lookup should reuse a short-lived cache to avoid repeated full DOM scans');
 assert.match(findDashboardProxy, /#app > \*/, 'dashboard proxy lookup should avoid scanning every descendant on refresh');
 const collectDomShareTargetOptions = extractFunctionBody(navHotfix, 'collectDomShareTargetOptions');
 assert.match(collectDomShareTargetOptions, /dashboard-checkbox|el-checkbox__input/, 'DOM fallback should inspect checked dashboard controls');
+assert.match(collectDomShareTargetOptions, /input\[type='checkbox'\]:checked/, 'DOM fallback should detect native checked card controls');
+assert.match(collectDomShareTargetOptions, /\.img-card\.is-selected/, 'DOM fallback should detect selected card wrappers');
 assert.match(collectDomShareTargetOptions, /shareItemFromVueNode/, 'DOM fallback should read Vue component props instead of display text only');
 assert.match(collectDomShareTargetOptions, /shareItemFromDomNode\(node, rows\)/, 'DOM fallback should recover selected cards from visible rows or card text');
 const shareItemFromDomNode = extractFunctionBody(navHotfix, 'shareItemFromDomNode');
 assert.match(shareItemFromDomNode, /matchingShareRowFromDom/, 'DOM share fallback should prefer the real dashboard row data');
 assert.match(shareItemFromDomNode, /findDashboardPathFromDom/, 'DOM share fallback should keep file targets inside the current breadcrumb directory');
+assert.match(shareItemFromDomNode, /withShareBasePath\(row, findDashboardPathFromDom\(\)\)/, 'DOM share fallback should keep matched row names inside the current folder');
 const promptShareExpiry = extractFunctionBody(navHotfix, 'promptShareExpiry');
 assert.match(promptShareExpiry, /data-share-target/, 'share creation modal should let the user choose the target');
 assert.match(promptShareExpiry, /data-share-action="confirm"/, 'share creation modal should include a visible confirm button');

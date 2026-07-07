@@ -167,12 +167,14 @@ function isDirectoryWithinShare(share, directory) {
 }
 
 function normalizeDirectoryList(share, directories) {
+    const base = normalizeDirectoryPath(share.targetPath);
     return directories
         .map(directory => normalizeDirectoryPath(directory))
         .filter(directory => isDirectoryWithinShare(share, directory))
         .map(directory => ({
             name: directory.replace(/\/$/g, '').split('/').pop() || '',
             path: directory,
+            relativePath: base && directory.startsWith(base) ? directory.slice(base.length) : directory,
         }));
 }
 

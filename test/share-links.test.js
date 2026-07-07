@@ -14,7 +14,9 @@ import {
 import { onRequest as manageShareRequest } from '../functions/api/manage/share/index.js';
 import { onRequest as manageSharePathRequest } from '../functions/api/manage/share/[[path]].js';
 import { onRequest as publicShareRequest } from '../functions/api/share/[[path]].js';
+import { onRequest as sharePageRequest } from '../functions/share/[[path]].js';
 import { returnWithCheck } from '../functions/file/fileTools.js';
+import { rebuildIndex } from '../functions/utils/indexManager.js';
 import { SqliteD1 } from '../deploy/server/sqliteD1.js';
 
 class FakeKV {
@@ -93,6 +95,10 @@ function jsonRequest(url, body, method = 'POST') {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+}
+
+function waitUntil(promise) {
+  Promise.resolve(promise).catch(() => {});
 }
 
 describe('share links', () => {
@@ -249,6 +255,59 @@ describe('share links', () => {
       params: { path: token },
     });
     assert.equal(revokedPublicResponse.status, 410);
+  });
+
+  it('lists shared directory children with relative paths for navigation', async () => {
+    const env = createEnv();
+    await seedFile(env, 'photos/root.jpg');
+    await seedFile(env, 'photos/trip/a.jpg');
+    await seedFile(env, 'photos/trip/nested/b.jpg');
+    await seedFile(env, 'private/outside.jpg');
+    await rebuildIndex({ env, waitUntil });
+
+    const created = await createShareLink(env, {
+      targetType: 'directory',
+      targetPath: 'photos',
+      expiresAt: Date.now() + 60_000,
+    });
+
+    const rootResponse = await publicShareRequest({
+      env,
+      waitUntil,
+      request: new Request(`https://img.example/api/share/${created.token}`),
+      params: { path: created.token },
+    });
+    assert.equal(rootResponse.status, 200);
+    const rootBody = await rootResponse.json();
+    assert.equal(rootBody.success, true);
+    assert.deepEqual(rootBody.directories.map(directory => directory.relativePath), ['trip/']);
+    assert.equal(rootBody.files.map(file => file.name).includes('photos/root.jpg'), true);
+    assert.equal(rootBody.files.map(file => file.name).includes('private/outside.jpg'), false);
+
+    const nestedResponse = await publicShareRequest({
+      env,
+      waitUntil,
+      request: new Request(`https://img.example/api/share/${created.token}?dir=trip%2F`),
+      params: { path: created.token },
+    });
+    assert.equal(nestedResponse.status, 200);
+    const nestedBody = await nestedResponse.json();
+    assert.equal(nestedBody.directory.relativePath, 'trip/');
+    assert.deepEqual(nestedBody.files.map(file => file.name), ['photos/trip/a.jpg']);
+    assert.deepEqual(nestedBody.directories.map(directory => directory.relativePath), ['trip/nested/']);
+  });
+
+  it('renders public share pages with directory navigation and download actions', async () => {
+    const response = await sharePageRequest({
+      request: new Request('https://img.example/share/test-token'),
+      params: { path: 'test-token' },
+    });
+    assert.equal(response.status, 200);
+    const html = await response.text();
+    assert.match(html, /shareApiHref\(initialDir\)/, 'share page should load the requested directory');
+    assert.match(html, /function renderDirectory/, 'share page should render clickable directories');
+    assert.match(html, /download="/, 'share page should expose a download action for files');
+    assert.match(html, /返回/, 'share page should allow navigation back to a parent directory');
   });
 
   it('allows shared files through file access checks without bypassing blocked metadata', async () => {

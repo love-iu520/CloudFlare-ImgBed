@@ -45,7 +45,9 @@ function renderSharePage(token) {
     .row:first-child { border-top: 0; }
     .name { overflow-wrap: anywhere; font-weight: 520; }
     .meta { margin-top: 4px; color: #637083; font-size: 13px; }
-    a.button { display: inline-flex; align-items: center; min-height: 34px; padding: 0 12px; border-radius: 6px; background: #155eef; color: #fff; text-decoration: none; font-size: 14px; }
+    .row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+    a.button { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 12px; border-radius: 6px; background: #155eef; color: #fff; text-decoration: none; font-size: 14px; }
+    a.button.secondary { background: #eef2f7; color: #1f2933; }
     .state { padding: 22px 16px; color: #637083; }
     .error { color: #b42318; }
     @media (prefers-color-scheme: dark) {
@@ -54,11 +56,13 @@ function renderSharePage(token) {
       .row { border-top-color: #2b3647; }
       .muted, .meta, .state { color: #9aa7b7; }
       a.button { background: #3b82f6; }
+      a.button.secondary { background: #263244; color: #e5e7eb; }
     }
     @media (max-width: 640px) {
       header { display: block; }
       .row { grid-template-columns: 1fr; }
-      a.button { justify-content: center; }
+      .row-actions { justify-content: stretch; }
+      a.button { flex: 1 1 110px; }
     }
   </style>
 </head>
@@ -77,6 +81,7 @@ function renderSharePage(token) {
     const encodedToken = "${encodedToken}";
     const content = document.getElementById("content");
     const expires = document.getElementById("expires");
+    const initialDir = normalizeRelativeDir(new URLSearchParams(window.location.search).get("dir") || "");
 
     function escapeText(value) {
       return String(value == null ? "" : value).replace(/[&<>"']/g, char => ({
@@ -101,17 +106,73 @@ function renderSharePage(token) {
       return size.toFixed(unit === 0 ? 0 : 1) + " " + units[unit];
     }
 
+    function normalizeRelativeDir(path) {
+      let normalized = String(path || "").split("\\\\").join("/");
+      while (normalized.charAt(0) === "/") normalized = normalized.slice(1);
+      while (normalized.indexOf("//") !== -1) normalized = normalized.replace("//", "/");
+      while (normalized.endsWith("/")) normalized = normalized.slice(0, -1);
+      return normalized ? normalized + "/" : "";
+    }
+
+    function parentRelativePath(relativeDir) {
+      const value = normalizeRelativeDir(relativeDir).replace(/\\/+$/, "");
+      const index = value.lastIndexOf("/");
+      return index === -1 ? "" : value.slice(0, index + 1);
+    }
+
+    function sharePageHref(relativeDir) {
+      const value = normalizeRelativeDir(relativeDir);
+      return window.location.pathname + (value ? "?dir=" + encodeURIComponent(value) : "");
+    }
+
+    function shareApiHref(relativeDir) {
+      const value = normalizeRelativeDir(relativeDir);
+      return "/api/share/" + encodedToken + (value ? "?dir=" + encodeURIComponent(value) : "");
+    }
+
+    function basename(path) {
+      const value = String(path || "").replace(/\\/+$/, "");
+      const index = value.lastIndexOf("/");
+      return index === -1 ? value : value.slice(index + 1);
+    }
+
     function renderFile(file) {
       const meta = file.metadata || {};
       const size = formatSize(meta.FileSizeBytes, meta.FileSize ? meta.FileSize + " MB" : "");
+      const fileName = meta.FileName || basename(file.name) || "download";
+      const fileUrl = file.url || "#";
       return '<div class="row">' +
-        '<div><div class="name">' + escapeText(meta.FileName || file.name) + '</div>' +
+        '<div><div class="name">' + escapeText(fileName) + '</div>' +
         '<div class="meta">' + escapeText([meta.FileType, size].filter(Boolean).join(" · ")) + '</div></div>' +
-        '<a class="button" href="' + file.url + '" target="_blank" rel="noopener">打开</a>' +
+        '<div class="row-actions">' +
+        '<a class="button" href="' + escapeText(fileUrl) + '" target="_blank" rel="noopener">打开</a>' +
+        '<a class="button secondary" href="' + escapeText(fileUrl) + '" download="' + escapeText(fileName) + '">下载</a>' +
+        '</div>' +
       '</div>';
     }
 
-    fetch("/api/share/" + encodedToken)
+    function renderDirectory(directory) {
+      const relativePath = normalizeRelativeDir(directory.relativePath || directory.path || "");
+      return '<div class="row">' +
+        '<div><div class="name">' + escapeText(directory.name || directory.path) + '</div>' +
+        '<div class="meta">文件夹</div></div>' +
+        '<div class="row-actions">' +
+        '<a class="button" href="' + escapeText(sharePageHref(relativePath)) + '">打开</a>' +
+        '</div>' +
+      '</div>';
+    }
+
+    function renderParentDirectory(relativeDir) {
+      if (!relativeDir) return "";
+      return '<div class="row">' +
+        '<div><div class="name">..</div><div class="meta">上级文件夹</div></div>' +
+        '<div class="row-actions">' +
+        '<a class="button secondary" href="' + escapeText(sharePageHref(parentRelativePath(relativeDir))) + '">返回</a>' +
+        '</div>' +
+      '</div>';
+    }
+
+    fetch(shareApiHref(initialDir))
       .then(async response => {
         const body = await response.json().catch(() => ({}));
         if (!response.ok || !body.success) {
@@ -131,12 +192,11 @@ function renderSharePage(token) {
           return;
         }
 
-        const directories = (data.directories || []).map(directory =>
-          '<div class="row"><div><div class="name">' + escapeText(directory.name || directory.path) +
-          '</div><div class="meta">文件夹</div></div></div>'
-        );
+        const currentDir = data.directory ? normalizeRelativeDir(data.directory.relativePath) : initialDir;
+        const directories = (data.directories || []).map(renderDirectory);
         const files = (data.files || []).map(renderFile);
-        content.innerHTML = directories.concat(files).join("") || '<div class="state">这个分享目录暂无文件。</div>';
+        const rows = [renderParentDirectory(currentDir)].concat(directories, files).join("");
+        content.innerHTML = rows || '<div class="state">这个分享目录暂无文件。</div>';
       })
       .catch(error => {
         content.innerHTML = '<div class="state error">' + escapeText(error.message) + '</div>';

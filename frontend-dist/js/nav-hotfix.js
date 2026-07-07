@@ -1158,6 +1158,8 @@
     proxy = proxy || {};
     var options = [];
     var seen = {};
+    var preferredInsertIndex = 0;
+    var currentBasePath = typeof proxy.currentPath === "string" ? proxy.currentPath : findDashboardPathFromDom();
 
     function addTarget(file, preferred) {
       if (!file) return;
@@ -1167,7 +1169,8 @@
       if (seen[key]) return;
       seen[key] = true;
       if (preferred) {
-        options.unshift(target);
+        options.splice(preferredInsertIndex, 0, target);
+        preferredInsertIndex += 1;
       } else {
         options.push(target);
       }
@@ -1183,7 +1186,7 @@
     var hasPreferredDomTarget = domOptions.some(function (target) { return target.__preferred; });
 
     selected.forEach(function (file) {
-      addTarget(file, true);
+      addTarget(withShareBasePath(file, currentBasePath), true);
     });
 
     domOptions.filter(function (target) {
@@ -1194,7 +1197,7 @@
 
     addTarget({
       isFolder: true,
-      name: typeof proxy.currentPath === "string" ? proxy.currentPath : findDashboardPathFromDom()
+      name: currentBasePath
     }, selected.length === 0 && !hasPreferredDomTarget);
 
     domOptions.filter(function (target) {
@@ -1204,7 +1207,7 @@
     });
 
     rows.forEach(function (file) {
-      addTarget(file, false);
+      addTarget(withShareBasePath(file, currentBasePath), false);
     });
 
     return options;
@@ -1226,6 +1229,17 @@
         targetPath: selectedPath
       })
     };
+  }
+
+  function withShareBasePath(file, basePath) {
+    if (!file || typeof file !== "object") return file;
+    if (file.__shareBasePath) return file;
+    var copy = {};
+    Object.keys(file).forEach(function (key) {
+      copy[key] = file[key];
+    });
+    copy.__shareBasePath = basePath || findDashboardPathFromDom();
+    return copy;
   }
 
   function resolveShareTargetPath(file) {
@@ -1262,7 +1276,7 @@
     var itemNode = node && node.closest ? node.closest(".img-card, .file-card, .list-item") : null;
     itemNode = itemNode || node;
     var row = matchingShareRowFromDom(itemNode, rows);
-    if (row) return row;
+    if (row) return withShareBasePath(row, findDashboardPathFromDom());
 
     var fileName = bestShareTextCandidate(itemNode);
     if (!fileName) return null;
@@ -1355,7 +1369,7 @@
     var options = [];
     var root = document.querySelector(".main-container") || document.querySelector(".container") || document;
     var selectedNodes = root.querySelectorAll(
-      ".img-card .el-checkbox__input.is-checked, .file-card .el-checkbox__input.is-checked, .content .el-checkbox__input.is-checked, .img-card .el-checkbox.is-checked, .file-card .el-checkbox.is-checked, .content .el-checkbox.is-checked, .list-item .dashboard-checkbox.checked, .list-item .dashboard-checkbox[aria-checked='true']"
+      ".img-card .el-checkbox__input.is-checked, .file-card .el-checkbox__input.is-checked, .content .el-checkbox__input.is-checked, .img-card .el-checkbox.is-checked, .file-card .el-checkbox.is-checked, .content .el-checkbox.is-checked, .img-card input[type='checkbox']:checked, .file-card input[type='checkbox']:checked, .content input[type='checkbox']:checked, .img-card [aria-checked='true'], .file-card [aria-checked='true'], .content [aria-checked='true'], .img-card.is-selected, .file-card.is-selected, .list-item.is-selected, .img-card.selected, .file-card.selected, .list-item.selected, .img-card .checked, .file-card .checked, .list-item .dashboard-checkbox.checked, .list-item .dashboard-checkbox[aria-checked='true']"
     );
     selectedNodes.forEach(function (node) {
       var item = shareItemFromVueNode(node) || shareItemFromDomNode(node, rows);
@@ -1381,7 +1395,7 @@
     var cursor = node;
     while (cursor) {
       var item = shareItemFromVueInstance(cursor.__vueParentComponent);
-      if (item) return item;
+      if (item) return withShareBasePath(item, findDashboardPathFromDom());
       cursor = cursor.parentElement;
     }
     return null;
