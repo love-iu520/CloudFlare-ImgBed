@@ -649,13 +649,6 @@
   cursor: pointer;
 }
 
-.cfib-share-target-list {
-  display: grid;
-  gap: 8px;
-  max-height: 220px;
-  overflow: auto;
-}
-
 .cfib-share-select-all {
   display: inline-flex;
   align-items: center;
@@ -665,6 +658,13 @@
   color: var(--el-text-color-secondary, #64748b);
   font-size: 13px;
   cursor: pointer;
+}
+
+.cfib-share-target-list {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow: auto;
 }
 
 .cfib-share-target-item {

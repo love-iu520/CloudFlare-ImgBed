@@ -197,12 +197,15 @@ const collectDomShareTargetOptions = extractFunctionBody(navHotfix, 'collectDomS
 assert.match(collectDomShareTargetOptions, /dashboard-checkbox|el-checkbox__input/, 'DOM fallback should inspect checked dashboard controls');
 assert.match(collectDomShareTargetOptions, /input\[type='checkbox'\]:checked/, 'DOM fallback should detect native checked card controls');
 assert.match(collectDomShareTargetOptions, /\.img-card\.is-selected/, 'DOM fallback should detect selected card wrappers');
+assert.match(collectDomShareTargetOptions, /\.folder-card/, 'DOM fallback should detect selected folder card wrappers');
 assert.match(collectDomShareTargetOptions, /shareItemFromVueNode/, 'DOM fallback should read Vue component props instead of display text only');
 assert.match(collectDomShareTargetOptions, /shareItemFromDomNode\(node, rows\)/, 'DOM fallback should recover selected cards from visible rows or card text');
 const shareItemFromDomNode = extractFunctionBody(navHotfix, 'shareItemFromDomNode');
 assert.match(shareItemFromDomNode, /matchingShareRowFromDom/, 'DOM share fallback should prefer the real dashboard row data');
 assert.match(shareItemFromDomNode, /findDashboardPathFromDom/, 'DOM share fallback should keep file targets inside the current breadcrumb directory');
 assert.match(shareItemFromDomNode, /withShareBasePath\(row, findDashboardPathFromDom\(\)\)/, 'DOM share fallback should keep matched row names inside the current folder');
+assert.match(shareItemFromDomNode, /isShareFolderDomNode/, 'DOM share fallback should mark folder cards as directory share targets');
+assert.match(shareItemFromDomNode, /bestShareTextCandidate\(itemNode, isFolderCard\)/, 'DOM share fallback should allow plain folder names without file extensions');
 const promptShareExpiry = extractFunctionBody(navHotfix, 'promptShareExpiry');
 assert.match(promptShareExpiry, /cfib-share-target-list/, 'share creation modal should show the selected share targets');
 assert.match(promptShareExpiry, /type="checkbox"/, 'share creation modal should allow removing individual selected targets');

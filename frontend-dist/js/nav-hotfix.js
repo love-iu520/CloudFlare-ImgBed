@@ -1286,18 +1286,25 @@
   }
 
   function shareItemFromDomNode(node, rows) {
-    var itemNode = node && node.closest ? node.closest(".img-card, .file-card, .list-item") : null;
+    var itemNode = node && node.closest ? node.closest(".img-card, .file-card, .folder-card, .directory-card, .folder-item, .list-item") : null;
     itemNode = itemNode || node;
     var row = matchingShareRowFromDom(itemNode, rows);
     if (row) return withShareBasePath(row, findDashboardPathFromDom());
 
-    var fileName = bestShareTextCandidate(itemNode);
+    var isFolderCard = isShareFolderDomNode(itemNode);
+    var fileName = bestShareTextCandidate(itemNode, isFolderCard);
     if (!fileName) return null;
     return {
       name: fileName,
-      isFolder: false,
+      isFolder: isFolderCard,
       __shareBasePath: findDashboardPathFromDom()
     };
+  }
+
+  function isShareFolderDomNode(node) {
+    if (!node || !node.matches) return false;
+    return node.matches(".folder-card, .directory-card, .folder-item") ||
+      Boolean(node.closest && node.closest(".folder-card, .directory-card, .folder-item"));
   }
 
   function matchingShareRowFromDom(node, rows) {
@@ -1318,13 +1325,13 @@
     return null;
   }
 
-  function bestShareTextCandidate(node) {
+  function bestShareTextCandidate(node, allowPlainText) {
     if (!node) return "";
     var candidates = [];
 
     function addCandidate(value) {
       value = normalizeDomText(value);
-      if (value && looksLikeFileName(value)) candidates.push(value);
+      if (value && (allowPlainText || looksLikeFileName(value))) candidates.push(value);
     }
 
     ["title", "aria-label", "data-name", "data-file", "data-path"].forEach(function (name) {
@@ -1382,7 +1389,7 @@
     var options = [];
     var root = document.querySelector(".main-container") || document.querySelector(".container") || document;
     var selectedNodes = root.querySelectorAll(
-      ".img-card .el-checkbox__input.is-checked, .file-card .el-checkbox__input.is-checked, .content .el-checkbox__input.is-checked, .img-card .el-checkbox.is-checked, .file-card .el-checkbox.is-checked, .content .el-checkbox.is-checked, .img-card input[type='checkbox']:checked, .file-card input[type='checkbox']:checked, .content input[type='checkbox']:checked, .img-card [role='checkbox'][aria-checked='true'], .file-card [role='checkbox'][aria-checked='true'], .content [role='checkbox'][aria-checked='true'], .img-card.is-selected, .file-card.is-selected, .list-item.is-selected, .img-card.selected, .file-card.selected, .list-item.selected, .list-item .dashboard-checkbox.checked, .list-item .dashboard-checkbox[aria-checked='true']"
+      ".img-card .el-checkbox__input.is-checked, .file-card .el-checkbox__input.is-checked, .folder-card .el-checkbox__input.is-checked, .directory-card .el-checkbox__input.is-checked, .folder-item .el-checkbox__input.is-checked, .content .el-checkbox__input.is-checked, .img-card .el-checkbox.is-checked, .file-card .el-checkbox.is-checked, .folder-card .el-checkbox.is-checked, .directory-card .el-checkbox.is-checked, .folder-item .el-checkbox.is-checked, .content .el-checkbox.is-checked, .img-card input[type='checkbox']:checked, .file-card input[type='checkbox']:checked, .folder-card input[type='checkbox']:checked, .directory-card input[type='checkbox']:checked, .folder-item input[type='checkbox']:checked, .content input[type='checkbox']:checked, .img-card [role='checkbox'][aria-checked='true'], .file-card [role='checkbox'][aria-checked='true'], .folder-card [role='checkbox'][aria-checked='true'], .directory-card [role='checkbox'][aria-checked='true'], .folder-item [role='checkbox'][aria-checked='true'], .content [role='checkbox'][aria-checked='true'], .img-card.is-selected, .file-card.is-selected, .folder-card.is-selected, .directory-card.is-selected, .folder-item.is-selected, .list-item.is-selected, .img-card.selected, .file-card.selected, .folder-card.selected, .directory-card.selected, .folder-item.selected, .list-item.selected, .list-item .dashboard-checkbox.checked, .list-item .dashboard-checkbox[aria-checked='true']"
     );
     selectedNodes.forEach(function (node) {
       var item = shareItemFromVueNode(node) || shareItemFromDomNode(node, rows);
@@ -1392,7 +1399,7 @@
       options.push(target);
     });
 
-    var itemNodes = root.querySelectorAll(".img-card, .file-card, .content > *, .list-item");
+    var itemNodes = root.querySelectorAll(".img-card, .file-card, .folder-card, .directory-card, .folder-item, .content > *, .list-item");
     itemNodes.forEach(function (node) {
       var item = shareItemFromVueNode(node) || shareItemFromDomNode(node, rows);
       var target = normalizeShareTargetOption(item);
