@@ -321,4 +321,27 @@ describe('share links', () => {
     });
     assert.equal(updated.expiresAt, null);
   });
+
+  it('adds the share token column when writing to an older D1 share_links table', async function () {
+    this.timeout(5000);
+
+    const d1 = new SqliteD1(':memory:');
+    d1.exec(readFileSync(new URL('../database/migrations/v2.7.5_add_share_links.sql', import.meta.url), 'utf8'));
+    const env = { img_d1: d1 };
+
+    const created = await createShareLink(env, {
+      targetType: 'directory',
+      targetPath: 'photos',
+      expiresInSeconds: 3600,
+    });
+    const columns = await d1.prepare('PRAGMA table_info(share_links)').all();
+    const columnNames = columns.results.map(column => column.name);
+    assert.ok(columnNames.includes('token'));
+
+    const listed = await listShareLinks(env, {
+      shareOrigin: 'https://img.example',
+    });
+    assert.equal(listed.shares[0].id, created.share.id);
+    assert.equal(listed.shares[0].url, `https://img.example/share/${encodeURIComponent(created.token)}`);
+  });
 });

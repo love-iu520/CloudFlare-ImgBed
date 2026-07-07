@@ -41,6 +41,7 @@
 
 - `database/init.sql` 是新库初始化脚本；新增表、列、索引或触发器时要同步考虑迁移脚本。
 - `share_links` 既存在于初始化脚本中，也有 `v2.7.5_add_share_links.sql` 和 `v2.7.6_add_share_token.sql` 迁移，用于旧库升级。
+- D1 适配层会在写入分享链接前检查旧 `share_links` 表是否缺少 `token` 列，缺失时自动执行补列，避免创建分享时报 `no column named token`。
 - `files.tags` 既在初始化脚本中存在，也有 `v2.2.1_add_tags_column.sql` 迁移。
 - `functions/utils/databaseAdapter.js` 同时支持 KV 和 D1。修改适配层时要跑相关测试，并确认 KV、D1、SQLite 三种路径是否行为一致。
 - 如果同时配置 KV 和 D1，必须阅读当前适配逻辑确认实际选择顺序，不要仅根据配置检查函数的返回说明做推断。

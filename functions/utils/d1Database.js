@@ -407,7 +407,19 @@ D1Database.prototype.list = function(options) {
 // ==================== 分享链接操作 ====================
 
 D1Database.prototype.putShareLink = function(share) {
-    var stmt = this.db.prepare(
+    var self = this;
+    return ensureShareTokenColumn(this).then(function() {
+        return insertShareLink(self, share);
+    }).catch(function(error) {
+        if (!isMissingShareTokenColumnError(error)) throw error;
+        return addShareTokenColumn(self).then(function() {
+            return insertShareLink(self, share);
+        });
+    });
+};
+
+function insertShareLink(database, share) {
+    var stmt = database.db.prepare(
         'INSERT OR REPLACE INTO share_links (' +
         'id, token, token_hash, token_prefix, target_type, target_path, expires_at, revoked_at, ' +
         'created_at_ms, updated_at_ms, view_count, last_viewed_at' +
@@ -428,7 +440,48 @@ D1Database.prototype.putShareLink = function(share) {
         share.viewCount || 0,
         share.lastViewedAt
     ).run();
-};
+}
+
+function ensureShareTokenColumn(database) {
+    if (database._shareTokenColumnReady) {
+        return Promise.resolve();
+    }
+
+    var stmt = database.db.prepare('PRAGMA table_info(share_links)');
+    return stmt.all().then(function(response) {
+        var columns = response.results || [];
+        var hasTokenColumn = columns.some(function(column) {
+            return column && column.name === 'token';
+        });
+        if (hasTokenColumn) {
+            database._shareTokenColumnReady = true;
+            return null;
+        }
+        return addShareTokenColumn(database);
+    });
+}
+
+function addShareTokenColumn(database) {
+    var stmt = database.db.prepare('ALTER TABLE share_links ADD COLUMN token TEXT');
+    return stmt.run().catch(function(error) {
+        if (isDuplicateShareTokenColumnError(error)) {
+            database._shareTokenColumnReady = true;
+            return null;
+        }
+        throw error;
+    }).then(function(result) {
+        database._shareTokenColumnReady = true;
+        return result;
+    });
+}
+
+function isMissingShareTokenColumnError(error) {
+    return /no column named token|has no column named token/i.test(String(error && error.message || error));
+}
+
+function isDuplicateShareTokenColumnError(error) {
+    return /duplicate column name: token/i.test(String(error && error.message || error));
+}
 
 D1Database.prototype.getShareLinkById = function(id) {
     var stmt = this.db.prepare('SELECT * FROM share_links WHERE id = ?');

@@ -77,6 +77,7 @@
 - `database/init.sql` 创建 `files`、`settings`、`index_operations`、`index_metadata`、`other_data` 和 `share_links` 表。
 - `database/migrations` 保存增量迁移，目前包含 `tags` 字段和 `share_links` 表迁移。
 - D1 逻辑封装在 `functions/utils/d1Database.js`；Docker/Node.js 模式使用 `deploy/server/sqliteD1.js` 模拟 D1。
+- D1 旧库如果已有 `share_links` 表但缺少 `token` 列，`functions/utils/d1Database.js` 会在写入分享链接前自动补列；迁移文件仍用于部署时显式升级。
 - 本地 Docker/Node.js 模式使用 `data/database.sqlite` 和 `data/r2`，这些属于运行数据，不应提交。
 - 存储渠道客户端位于 `functions/utils/storage`。
 
