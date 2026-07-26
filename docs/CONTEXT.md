@@ -19,6 +19,7 @@
 - 前端源码本地开发：在 `D:\Dev\Projects\Practice\Sanyue-ImgHub` 运行 `npm run serve`，默认监听 `3000`，`.env.development` 指向后端 `http://127.0.0.1:8080`。
 - 前端源码构建：在 `D:\Dev\Projects\Practice\Sanyue-ImgHub` 运行 `npm run build`，输出 `dist`，确认后同步到本仓库 `frontend-dist`。
 - Docker/Node.js 模式：`npm run start:docker` 使用 `deploy/server/index.js`，通过 Hono 模拟 Pages Functions 路由，用 SQLite 模拟 D1，用本地文件系统模拟 R2。
+- Docker/Node.js 模式使用有界进程内 Cache API（默认最多 100 项、32 MiB），并优先返回 `frontend-dist` 已有的 gzip 预压缩资源；带内容哈希的静态资源使用长期 immutable 缓存，入口页和未哈希热修复资源要求重新验证。
 - Worker 部署：`npm run deploy:worker` 先运行 `deploy/worker/generate-routes.js`，再使用 `wrangler deploy --config deploy/worker/wrangler.toml`。
 - 测试框架：Mocha，默认命令为 `npm test`。
 
@@ -76,6 +77,8 @@
 - 分享链接支持单文件、单目录和多目标集合分享；多目标创建使用 `targets` 数组，一个 token 可包含多个文件和目录 item。
 - 目录分享不会在创建时展开成文件快照，而是按目录前缀动态列出当前目录内容；多目标集合中的目录 item 也沿用该动态前缀浏览规则。
 - 公开能力包括 `/api/public/list`、`/random`、`/share/*`、`/api/share/*` 和 `/dav/*`。
+- 随机 API 的基础地址为 `/random`；允许目录留空时覆盖全部目录，配置多个允许目录后，不传 `dir` 也会在这些目录的并集中随机，显式传入 `dir` 时仍执行目录边界校验。
+- `/random?type=img` 会流式透传文件响应，不再把整张图片读入 Blob；随机候选列表和公开列表使用 24 小时内部缓存，目录内容变化时会同步失效相关祖先目录缓存。
 - 系统配置由 `functions/api/manage/sysConfig` 与 `functions/utils/sysConfig.js` 协作读取，配置主要持久化在数据库中。
 
 ## 数据库与存储
@@ -95,6 +98,8 @@
 
 - Cloudflare Pages 用户需把构建输出目录配置为 `frontend-dist`。
 - 前端源码修改后，应先在 `Sanyue-ImgHub` 构建并检查 `dist`，再同步到本仓库 `frontend-dist` 用于 Pages、Workers 或 Docker/Node.js 部署。
+- 页面背景配置兼容直接粘贴单张图片 URL、`bing` 和 JSON URL 数组；保存页面配置后应刷新公开 `userConfig`，Bing URL 列表按需加载而不是等待所有图片预加载完成。
+- 随机 API 设置页会展示基于当前域名的 `/random`、直接图片、自适应图片和 URL 文本地址，并支持复制；部署产物兼容层位于 `frontend-dist/js/random-api-help.js`，源码位于相邻前端仓库 `public/js/random-api-help.js`。
 - 前端产物同步流程记录在 `docs/FRONTEND_DIST_SYNC.md`；修改 `frontend-dist` 中 JS/CSS 时需要确认对应 `.gz` 文件同步。
 - Worker 配置模板在 `deploy/worker/wrangler.toml`，GitHub Actions 可通过 Secrets 运行 `deploy/worker/generate-toml.js` 动态生成配置。
 - `.github/workflows/deploy-worker.yml` 只在 fork 仓库且配置 Cloudflare Secrets 时部署 Worker。

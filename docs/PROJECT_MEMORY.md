@@ -20,6 +20,9 @@
 - 2026-07-07：新增 `functions/utils/logger.js` 作为脱敏日志工具；上传和第三方存储路径应优先使用 logger，默认 warn/error，避免直接输出 token、签名 URL、完整第三方 API 响应或 SHA256/OID。
 - 2026-07-07：新增 `database/migrations/README.md` 和 `docs/FRONTEND_DIST_SYNC.md`，分别记录数据库迁移规则和前端产物同步 checklist。
 - 2026-07-07：新增 `npm run test:routes`，会重新生成 Worker 路由并运行 `test/worker-routes-static.test.js`。
+- 2026-07-13：随机 API 基础地址明确为 `/random`；允许目录留空代表全部目录，非空且请求未传 `dir` 时会自动在允许目录并集中随机。随机图片改为流式透传，候选缓存改用响应 TTL，并在文件变化时失效祖先目录缓存。
+- 2026-07-13：Docker/Node.js 增加有界内存 Cache API 和 gzip 预压缩静态资源支持；哈希资源长期缓存，入口页与未哈希热修复资源使用 `no-cache`。
+- 2026-07-13：主页 `uploadBkImg` 支持直接粘贴单张 URL，配置保存后刷新前端公开配置；Bing 背景不再等待所有图片预加载。随机 API 地址帮助脚本同时维护在前端源码 `public/js/random-api-help.js` 和本仓库部署产物中。
 - `frontend-dist` 从 README 的 v2.7.1 公告开始是 Cloudflare Pages 构建输出目录。
 
 ## 维护注意事项

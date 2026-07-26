@@ -2,7 +2,7 @@
  * 公开文件列表 API
  * 负责按公开浏览配置返回可访问文件和目录列表，并维护列表缓存
  */
-import { fetchOthersConfig } from "../../utils/sysConfig";
+import { fetchOthersConfig } from "../../utils/sysConfig.js";
 import { readIndex } from '../../utils/indexManager.js';
 
 // CORS 跨域响应头
@@ -102,14 +102,18 @@ async function getPublicFileList(context, url, dir, recursive) {
         totalCount: result.totalCount,
     };
 
-    // 缓存结果，缓存时间为24小时
-    await cache.put(cacheKey, new Response(JSON.stringify(cacheData), {
+    // 缓存结果 24 小时；Cloudflare Cache API 通过响应 Cache-Control 控制 TTL。
+    const cacheWrite = cache.put(cacheKey, new Response(JSON.stringify(cacheData), {
         headers: {
             "Content-Type": "application/json",
+            "Cache-Control": "public, max-age=86400",
         }
-    }), {
-        expirationTtl: 24 * 60 * 60
-    });
+    }));
+    if (typeof context.waitUntil === 'function') {
+        context.waitUntil(cacheWrite);
+    } else {
+        await cacheWrite;
+    }
 
     cacheData.fromCache = false;
     return cacheData;

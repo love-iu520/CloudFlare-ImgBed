@@ -3,8 +3,8 @@
   "version": "2.7.4",
   "type": "module",
   "scripts": {
-    "ci-test": "concurrently --kill-others \"npm start\" \"wait-on http://localhost:8080 && mocha\"",
-    "ci-test:docker": "concurrently --kill-others \"npm run start:docker\" \"wait-on http://localhost:8080 && mocha\"",
+    "ci-test": "concurrently --kill-others --success command-1 \"npm start\" \"wait-on http://localhost:8080 && mocha\"",
+    "ci-test:docker": "concurrently --kill-others --success command-1 \"npm run start:docker\" \"wait-on http://localhost:8080 && mocha\"",
     "test": "mocha",
     "test:routes": "node deploy/worker/generate-routes.js && mocha test\\worker-routes-static.test.js",
     "start": "npx wrangler pages dev ./frontend-dist --kv \"img_url\" --r2 \"img_r2\" --ip 0.0.0.0 --port 8080 --persist-to ./data",

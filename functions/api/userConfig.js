@@ -2,44 +2,64 @@
  * 用户端页面配置 API
  * 负责读取页面配置并转换为前端可直接使用的用户配置对象
  */
-import { fetchPageConfig } from "../utils/sysConfig";
+import { fetchPageConfig } from "../utils/sysConfig.js";
+
+const BACKGROUND_CONFIG_IDS = new Set([
+    'loginBkImg',
+    'uploadBkImg',
+    'adminLoginBkImg',
+    'adminBkImg',
+]);
+
+export function parseUserConfigValue(config) {
+    const rawValue = config?.value;
+    let parsedValue = rawValue;
+
+    if (typeof rawValue === 'string') {
+        const trimmedValue = rawValue.trim();
+        try {
+            parsedValue = JSON.parse(trimmedValue);
+        } catch (error) {
+            parsedValue = trimmedValue;
+        }
+    }
+
+    // 背景管理器历史上只接受 bing 或 URL 数组。这里兼容管理员直接粘贴单个 URL，
+    // 避免配置保存成功但主页静默不显示背景。
+    if (BACKGROUND_CONFIG_IDS.has(config?.id) && typeof parsedValue === 'string') {
+        const normalizedValue = parsedValue.trim();
+        if (normalizedValue.toLowerCase() === 'bing') {
+            return 'bing';
+        }
+        if (normalizedValue) {
+            return [normalizedValue];
+        }
+    }
+
+    return parsedValue;
+}
 
 export async function onRequest(context) {
     const { env } = context;
     const PageConfig = await fetchPageConfig(env);
-    const userConfigList = PageConfig.config;
+    const userConfigList = PageConfig.config || [];
     const userConfig = {};
     
     for (const config of userConfigList) {
         if (config.value !== undefined && config.value !== null && config.value !== '') {
-            // 将config解析为JSON对象，若解析失败则返回原始字符串
-            try {
-                userConfig[config.id] = JSON.parse(config.value);
-            } catch (error) {
-                userConfig[config.id] = config.value;
-            }
+            userConfig[config.id] = parseUserConfigValue(config);
         } else if (config.type === 'boolean' && config.default !== undefined) {
             // 布尔类型使用默认值
             userConfig[config.id] = config.default;
         }
     }
 
-    // 检查 USER_CONFIG 是否为空或未定义
-    if (!userConfig) {
-        return new Response(JSON.stringify({}), { status: 200 });
-    }
-
-    try {
-        // 尝试解析 USER_CONFIG 为 JSON
-        const parsedConfig = userConfig;
-        // 检查解析后的结果是否为对象
-        if (typeof parsedConfig === 'object' && parsedConfig !== null) {
-            return new Response(JSON.stringify(parsedConfig), { status: 200 });
-        } else {
-            return new Response(JSON.stringify({}), { status: 200 });
-        }
-    } catch (error) {
-        // 捕捉解析错误并返回空对象
-        return new Response(JSON.stringify({}), { status: 200 });
-    }
+    return new Response(JSON.stringify(userConfig), {
+        status: 200,
+        headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            // 页面配置修改后必须重新验证，避免浏览器或中间 CDN 返回旧背景配置。
+            'Cache-Control': 'no-cache, max-age=0, must-revalidate',
+        },
+    });
 }

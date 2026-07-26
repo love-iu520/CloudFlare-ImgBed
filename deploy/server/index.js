@@ -13,6 +13,7 @@ import { join, resolve, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { SqliteD1 } from './sqliteD1.js';
 import { LocalR2Storage } from './r2Storage.js';
+import { MemoryCache } from './memoryCache.js';
 
 const NativeResponse = globalThis.Response;
 
@@ -21,11 +22,7 @@ const NativeResponse = globalThis.Response;
 // 模拟 Cloudflare Cache API（Node.js 中不存在）
 if (typeof globalThis.caches === 'undefined') {
     globalThis.caches = {
-        default: {
-            async match() { return undefined; },
-            async put() {},
-            async delete() { return false; },
-        },
+        default: new MemoryCache(),
     };
 }
 
@@ -323,6 +320,18 @@ async function handleFunctionRequest(originalRequest, pathname) {
 // ==================== Hono 应用 ====================
 
 const app = new Hono();
+const HASHED_STATIC_ASSET_PATTERN = /\.[a-f0-9]{8,}\./i;
+const REVALIDATED_STATIC_ASSET_PATTERN = /(?:^|[\\/])(?:index\.html|nav-hotfix\.(?:js|css)|random-api-help\.js)(?:\.(?:br|gz))?$/i;
+const IMMUTABLE_STATIC_CACHE_CONTROL = 'public, max-age=31536000, immutable';
+const REVALIDATED_STATIC_CACHE_CONTROL = 'no-cache';
+
+function setStaticCacheControl(filePath, context) {
+    if (HASHED_STATIC_ASSET_PATTERN.test(filePath)) {
+        context.header('Cache-Control', IMMUTABLE_STATIC_CACHE_CONTROL);
+    } else if (REVALIDATED_STATIC_ASSET_PATTERN.test(filePath)) {
+        context.header('Cache-Control', REVALIDATED_STATIC_CACHE_CONTROL);
+    }
+}
 
 // 判断是否是 function 路径
 const FUNCTION_PREFIXES = ['/api/', '/upload', '/file/', '/dav/', '/random'];
@@ -380,6 +389,8 @@ app.all('*', async (c, next) => {
 app.use('/*', serveStatic({
     root: './frontend-dist',
     rewriteRequestPath: (path) => path,
+    precompressed: true,
+    onFound: setStaticCacheControl,
 }));
 
 // 默认返回 index.html（SPA 支持）
@@ -387,6 +398,7 @@ app.get('*', async (c) => {
     const indexPath = join(ROOT_DIR, 'frontend-dist', 'index.html');
     if (existsSync(indexPath)) {
         const content = readFileSync(indexPath, 'utf8');
+        c.header('Cache-Control', REVALIDATED_STATIC_CACHE_CONTROL);
         return c.html(content);
     }
     return c.text('Not Found', 404);

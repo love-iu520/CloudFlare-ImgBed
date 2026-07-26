@@ -1,5 +1,5 @@
-import { fetchOthersConfig } from "../utils/sysConfig";
-import { readIndex } from "../utils/indexManager";
+import { fetchOthersConfig } from "../utils/sysConfig.js";
+import { readIndex } from "../utils/indexManager.js";
 import { detectDevice, resolveOrientation, addClientHintsHeaders } from "./adaptive.js";
 
 // CORS 跨域响应头
@@ -9,9 +9,6 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Max-Age': '86400',
 };
-
-let othersConfig = {};
-let allowRandom = false;
 
 export async function onRequest(context) {
     // Contents of context object
@@ -31,20 +28,15 @@ export async function onRequest(context) {
     }
 
     // 读取其他设置
-    othersConfig = await fetchOthersConfig(env);
-    allowRandom = othersConfig.randomImageAPI.enabled;
-    const allowedDir = othersConfig.randomImageAPI.allowedDir;
+    const othersConfig = await fetchOthersConfig(env);
+    const randomImageAPI = othersConfig?.randomImageAPI;
+    const allowRandom = randomImageAPI?.enabled === true;
+    const allowedDirList = normalizeAllowedDirectories(randomImageAPI?.allowedDir);
 
     // 检查是否启用了随机图功能
     if (allowRandom != true) {
         return new Response(JSON.stringify({ error: "Random is disabled" }), { status: 403, headers: corsHeaders });
     }
-
-    // 处理允许的目录，每个目录调整为标准格式，去掉首尾空格，去掉开头的/，替换多个连续的/为单个/，去掉末尾的/
-    const allowedDirList = allowedDir.split(',');
-    const allowedDirListFormatted = allowedDirList.map(item => {
-        return item.trim().replace(/^\/+/, '').replace(/\/{2,}/g, '/').replace(/\/$/, '');
-    });
 
     // 从params中读取返回的文件类型
     let fileType = requestUrl.searchParams.get('content');
@@ -74,23 +66,20 @@ export async function onRequest(context) {
     // 其他情况（未指定或无效值）：orientation 保持空字符串，不过滤
 
     // 读取指定文件夹
-    const paramDir = requestUrl.searchParams.get('dir') || '';
-    const dir = paramDir.replace(/^\/+/, '').replace(/\/{2,}/g, '/').replace(/\/$/, '');
+    const hasDirParam = requestUrl.searchParams.has('dir');
+    const dir = normalizeDirectory(requestUrl.searchParams.get('dir'));
 
-    // 检查是否在允许的目录中，或是允许目录的子目录
-    let dirAllowed = false;
-    for (let i = 0; i < allowedDirListFormatted.length; i++) {
-        if (allowedDirListFormatted[i] === '' || dir === allowedDirListFormatted[i] || dir.startsWith(allowedDirListFormatted[i] + '/')) {
-            dirAllowed = true;
-            break;
-        }
-    }
-    if (!dirAllowed) {
+    // 白名单留空时允许全部目录；显式指定 dir 时仍校验目录边界。
+    if (hasDirParam && allowedDirList.length > 0 && !isDirectoryAllowed(dir, allowedDirList)) {
         return new Response(JSON.stringify({ error: "Directory not allowed" }), { status: 403, headers: corsHeaders });
     }
 
-    // 调用randomFileList接口，读取KV数据库中的所有记录
-    let allRecords = await getRandomFileList(context, requestUrl, dir);
+    // 未传 dir 时只读取一次根候选列表，再按白名单过滤。这样允许多个目录时，
+    // 冷请求不会为了每个目录重复加载完整索引。
+    let allRecords = await getRandomFileList(context, requestUrl, hasDirParam ? dir : '');
+    if (!hasDirParam && allowedDirList.length > 0) {
+        allRecords = allRecords.filter(record => isFileInAllowedDirectory(record.name, allowedDirList));
+    }
 
     // 筛选出符合fileType要求的记录
     allRecords = allRecords.filter(item => { return fileType.some(type => item.FileType?.includes(type)) });
@@ -126,6 +115,7 @@ export async function onRequest(context) {
 
     // 构建响应头：添加 CORS 跨域响应头，自适应模式下添加 Client Hints 协商头
     const responseHeaders = new Headers(corsHeaders);
+    responseHeaders.set('Cache-Control', 'no-store, max-age=0');
     if (isAutoMode) {
         addClientHintsHeaders(responseHeaders);
     }
@@ -148,19 +138,21 @@ export async function onRequest(context) {
 
         // if param 'type' is set to 'img', return the image
         if (randomType == 'img') {
-            // Return an image response
             randomUrl = requestUrl.origin + randomPath;
-            let contentType = 'image/jpeg';
-            const imgHeaders = new Headers(responseHeaders);
-            return new Response(await fetch(randomUrl).then(res => {
-                contentType = res.headers.get('content-type');
-                return res.blob();
-            }), {
-                headers: (() => {
-                    imgHeaders.set('Content-Type', contentType || 'image/jpeg');
-                    return imgHeaders;
-                })(),
-                status: 200
+            const upstreamResponse = await fetch(randomUrl);
+            const imgHeaders = new Headers(upstreamResponse.headers);
+            for (const [header, value] of Object.entries(corsHeaders)) {
+                imgHeaders.set(header, value);
+            }
+            if (!imgHeaders.has('Content-Type')) {
+                imgHeaders.set('Content-Type', 'image/jpeg');
+            }
+            imgHeaders.set('Cache-Control', 'no-store, max-age=0');
+
+            return new Response(upstreamResponse.body, {
+                headers: imgHeaders,
+                status: upstreamResponse.status,
+                statusText: upstreamResponse.statusText,
             });
         }
         
@@ -172,18 +164,45 @@ export async function onRequest(context) {
     }
 }
 
+function normalizeDirectory(dir) {
+    if (typeof dir !== 'string') return '';
+    return dir.trim().replace(/^\/+/, '').replace(/\/{2,}/g, '/').replace(/\/+$/, '');
+}
+
+function normalizeAllowedDirectories(allowedDir) {
+    if (typeof allowedDir !== 'string') return [];
+    return [...new Set(allowedDir.split(',').map(normalizeDirectory).filter(Boolean))];
+}
+
+function isDirectoryAllowed(dir, allowedDirs) {
+    return allowedDirs.some(allowedDir => dir === allowedDir || dir.startsWith(allowedDir + '/'));
+}
+
+function isFileInAllowedDirectory(fileName, allowedDirs) {
+    const normalizedName = normalizeDirectory(fileName);
+    return allowedDirs.some(allowedDir => normalizedName.startsWith(allowedDir + '/'));
+}
+
 async function getRandomFileList(context, url, dir) {
     // 检查缓存中是否有记录，有则直接返回
     const cache = caches.default;
-    const cacheRes = await cache.match(`${url.origin}/api/randomFileList?dir=${dir}`);
+    const cacheKey = `${url.origin}/api/randomFileList?dir=${dir}`;
+    const cacheRes = await cache.match(cacheKey);
     if (cacheRes) {
-        return JSON.parse(await cacheRes.text());
+        try {
+            const cachedRecords = await cacheRes.json();
+            if (Array.isArray(cachedRecords)) {
+                return cachedRecords;
+            }
+        } catch (error) {
+            // 忽略损坏或旧版空缓存，重新读取索引。
+        }
     }
 
-    let allRecords = await readIndex(context, { directory: dir, count: -1, includeSubdirFiles: true, accessStatus: 'normal' });
+    const indexResult = await readIndex(context, { directory: dir, count: -1, includeSubdirFiles: true, accessStatus: 'normal' });
 
     // 仅保留记录的name和metadata中的必要字段
-    allRecords = allRecords.files?.map(item => {
+    const allRecords = (indexResult?.files || []).map(item => {
         return {
             name: item.id,
             FileType: item.metadata?.FileType,
@@ -192,14 +211,18 @@ async function getRandomFileList(context, url, dir) {
         }
     });
 
-    // 缓存结果，缓存时间为24小时
-    await cache.put(`${url.origin}/api/randomFileList?dir=${dir}`, new Response(JSON.stringify(allRecords), {
+    // 缓存结果 24 小时，Cloudflare Cache API 通过响应头控制 TTL。
+    const cacheWrite = cache.put(cacheKey, new Response(JSON.stringify(allRecords), {
         headers: {
             "Content-Type": "application/json",
+            "Cache-Control": "public, max-age=86400",
         }
-    }), {
-        expirationTtl: 24 * 60 * 60
-    });
+    }));
+    if (typeof context.waitUntil === 'function') {
+        context.waitUntil(cacheWrite);
+    } else {
+        await cacheWrite;
+    }
     
     return allRecords;
 }

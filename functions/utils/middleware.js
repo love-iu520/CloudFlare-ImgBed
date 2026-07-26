@@ -1,31 +1,32 @@
 import sentryPlugin from "@cloudflare/pages-plugin-sentry";
 import '@sentry/tracing';
-import { fetchOthersConfig } from "./sysConfig";
+import { fetchOthersConfig } from "./sysConfig.js";
 import { checkDatabaseConfig as checkDbConfig } from './databaseAdapter.js';
 import { createLogger } from './logger.js';
 
-let disableTelemetry = false;
 const logger = createLogger('middleware');
+const DEFAULT_SAMPLE_RATE = 0.001;
+const SAMPLE_RATE_CACHE_TTL_MS = 10 * 60 * 1000;
+const SAMPLE_RATE_TIMEOUT_MS = 1000;
+const sampleRateCache = {
+  value: DEFAULT_SAMPLE_RATE,
+  expiresAt: 0,
+  pending: null,
+};
 
 export async function errorHandling(context) {
   // 读取KV中的设置
   const othersConfig = await fetchOthersConfig(context.env);
-  disableTelemetry = !othersConfig.telemetry.enabled;
+  const telemetryEnabled = othersConfig.telemetry?.enabled === true;
+  context.data.othersConfig = othersConfig;
+  context.data.telemetry = telemetryEnabled;
 
   const env = context.env;
-  if (!disableTelemetry) {
-    context.data.telemetry = true;
-    let remoteSampleRate = 0.001;
-    try {
-      const sampleRate = await fetchSampleRate(context)
-      //check if the sample rate is not null
-      if (sampleRate) {
-        remoteSampleRate = sampleRate;
-      }
-    } catch (e) {
-      logger.warn('Failed to fetch remote sample rate', e);
-    }
-    const sampleRate = env.sampleRate || remoteSampleRate;
+  if (telemetryEnabled) {
+    const configuredSampleRate = Number(env.sampleRate);
+    const sampleRate = Number.isFinite(configuredSampleRate)
+      ? configuredSampleRate
+      : getCachedSampleRate(context);
     return sentryPlugin({
       dsn: "https://44b7b443108ec6d298044b125ff89d28@o4507644548022272.ingest.us.sentry.io/4507644555100160",
       tracesSampleRate: sampleRate,
@@ -36,11 +37,8 @@ export async function errorHandling(context) {
 }
 
 export async function telemetryData(context) {
-  // 读取KV中的设置
-  const othersConfig = await fetchOthersConfig(context.env);
-  disableTelemetry = !othersConfig.telemetry.enabled;
-  
-  if (!disableTelemetry) {
+  // errorHandling 已读取并记录遥测开关，避免同一上传请求重复访问数据库。
+  if (context.data.telemetry === true) {
     try {
       const parsedHeaders = {};
       context.request.headers.forEach((value, key) => {
@@ -106,13 +104,53 @@ export async function traceData(context, span, op, name) {
   }
 }
 
-async function fetchSampleRate(context) {
-  const data = context.data
-  if (data.telemetry) {
-    const url = "https://frozen-sentinel.pages.dev/signal/sampleRate.json";
-    const response = await fetch(url);
+function getCachedSampleRate(context) {
+  const now = Date.now();
+  if (sampleRateCache.expiresAt > now) {
+    return sampleRateCache.value;
+  }
+
+  if (!sampleRateCache.pending) {
+    sampleRateCache.pending = refreshSampleRate()
+      .catch((error) => {
+        sampleRateCache.expiresAt = Date.now() + 60 * 1000;
+        logger.warn('Failed to refresh remote sample rate', error);
+      })
+      .finally(() => {
+        sampleRateCache.pending = null;
+      });
+  }
+
+  if (typeof context.waitUntil === 'function') {
+    context.waitUntil(sampleRateCache.pending);
+  }
+
+  // 冷启动时立即使用安全默认值，不让外部遥测接口阻塞上传响应。
+  return sampleRateCache.value;
+}
+
+async function refreshSampleRate() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SAMPLE_RATE_TIMEOUT_MS);
+
+  try {
+    const response = await fetch('https://frozen-sentinel.pages.dev/signal/sampleRate.json', {
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`Sample rate request failed with status ${response.status}`);
+    }
+
     const json = await response.json();
-    return json.rate;
+    const rate = Number(json.rate);
+    if (!Number.isFinite(rate) || rate < 0 || rate > 1) {
+      throw new Error('Invalid remote sample rate');
+    }
+
+    sampleRateCache.value = rate;
+    sampleRateCache.expiresAt = Date.now() + SAMPLE_RATE_CACHE_TTL_MS;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
