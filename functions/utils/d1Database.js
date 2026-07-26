@@ -629,6 +629,15 @@ D1Database.prototype.revokeShareLink = function(id, revokedAt) {
     return stmt.bind(revokedAt, revokedAt, id).run();
 };
 
+D1Database.prototype.deleteShareLink = function(id) {
+    var self = this;
+    return ensureShareItemsTable(this).then(function() {
+        return self.db.prepare('DELETE FROM share_link_items WHERE share_id = ?').bind(id).run();
+    }).then(function() {
+        return self.db.prepare('DELETE FROM share_links WHERE id = ?').bind(id).run();
+    });
+};
+
 D1Database.prototype.incrementShareView = function(id, viewedAt) {
     var stmt = this.db.prepare(
         'UPDATE share_links SET view_count = view_count + 1, last_viewed_at = ?, updated_at_ms = ? WHERE id = ?'

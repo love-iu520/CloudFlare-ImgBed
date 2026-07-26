@@ -2,6 +2,9 @@ import { getDatabase } from '../../../utils/databaseAdapter.js';
 import {
     canShareAccessMetadata,
     createShareLink,
+    deleteShareLink,
+    getShareById,
+    getShareAvailability,
     listShareLinks,
     normalizeDirectoryPath,
     normalizeFilePath,
@@ -36,6 +39,9 @@ export async function onRequest(context) {
         if (request.method === 'DELETE') {
             const url = new URL(request.url);
             const id = url.searchParams.get('id');
+            if (url.searchParams.get('permanent') === 'true') {
+                return await deleteShare(env, id);
+            }
             return await revokeShare(env, id);
         }
 
@@ -139,6 +145,31 @@ export async function revokeShare(env, id) {
     if (!share) {
         return jsonResponse({ success: false, message: 'Share link not found' }, { status: 404 });
     }
+
+    return jsonResponse({
+        success: true,
+        share,
+    });
+}
+
+export async function deleteShare(env, id) {
+    if (!id) {
+        return jsonResponse({ success: false, message: 'Share id is required' }, { status: 400 });
+    }
+
+    const existing = await getShareById(env, id);
+    if (!existing) {
+        return jsonResponse({ success: false, message: 'Share link not found' }, { status: 404 });
+    }
+
+    if (getShareAvailability(existing).valid) {
+        return jsonResponse({
+            success: false,
+            message: 'Active share link must be revoked before permanent deletion',
+        }, { status: 409 });
+    }
+
+    const share = await deleteShareLink(env, id);
 
     return jsonResponse({
         success: true,

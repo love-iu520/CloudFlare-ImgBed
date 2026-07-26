@@ -1,4 +1,4 @@
-import { revokeShare, updateShare } from './index.js';
+import { deleteShare, revokeShare, updateShare } from './index.js';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -27,6 +27,11 @@ export async function onRequest(context) {
     const id = decodeURIComponent(String(params.path || '')).split('/')[0];
     if (request.method === 'PATCH') {
         return await updateShare(request, env, id);
+    }
+
+    const url = new URL(request.url);
+    if (url.searchParams.get('permanent') === 'true') {
+        return await deleteShare(env, id);
     }
 
     return await revokeShare(env, id);

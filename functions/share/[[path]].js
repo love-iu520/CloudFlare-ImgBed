@@ -46,23 +46,32 @@ function renderSharePage(token) {
     .name { overflow-wrap: anywhere; font-weight: 520; }
     .meta { margin-top: 4px; color: #637083; font-size: 13px; }
     .row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-    a.button { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 12px; border-radius: 6px; background: #155eef; color: #fff; text-decoration: none; font-size: 14px; }
-    a.button.secondary { background: #eef2f7; color: #1f2933; }
+    .button { display: inline-flex; align-items: center; justify-content: center; min-height: 34px; padding: 0 12px; border: 0; border-radius: 6px; background: #155eef; color: #fff; text-decoration: none; font: inherit; font-size: 14px; cursor: pointer; }
+    .button.secondary { background: #eef2f7; color: #1f2933; }
     .state { padding: 22px 16px; color: #637083; }
     .error { color: #b42318; }
+    .preview-overlay { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; background: rgba(15, 23, 42, 0.82); }
+    .preview-overlay[hidden] { display: none; }
+    .preview-dialog { position: relative; width: min(1080px, 100%); max-height: calc(100vh - 48px); padding: 42px 18px 16px; border-radius: 10px; background: #fff; box-shadow: 0 24px 72px rgba(0, 0, 0, 0.35); text-align: center; }
+    .preview-close { position: absolute; top: 8px; right: 10px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: transparent; color: #475467; font-size: 26px; line-height: 1; cursor: pointer; }
+    .preview-image { display: block; width: 100%; max-height: calc(100vh - 130px); object-fit: contain; }
+    .preview-caption { margin-top: 10px; color: #637083; font-size: 14px; overflow-wrap: anywhere; }
     @media (prefers-color-scheme: dark) {
       body { background: #111827; color: #e5e7eb; }
       .panel { background: #182231; border-color: #334155; }
       .row { border-top-color: #2b3647; }
       .muted, .meta, .state { color: #9aa7b7; }
-      a.button { background: #3b82f6; }
-      a.button.secondary { background: #263244; color: #e5e7eb; }
+      .button { background: #3b82f6; }
+      .button.secondary { background: #263244; color: #e5e7eb; }
+      .preview-dialog { background: #182231; }
+      .preview-close { color: #e5e7eb; }
+      .preview-caption { color: #9aa7b7; }
     }
     @media (max-width: 640px) {
       header { display: block; }
       .row { grid-template-columns: 1fr; }
       .row-actions { justify-content: stretch; }
-      a.button { flex: 1 1 110px; }
+      .button { flex: 1 1 110px; }
     }
   </style>
 </head>
@@ -76,11 +85,22 @@ function renderSharePage(token) {
       <div class="state">正在加载分享内容...</div>
     </section>
   </main>
+  <div class="preview-overlay" id="previewOverlay" hidden>
+    <div class="preview-dialog" role="dialog" aria-modal="true" aria-labelledby="previewCaption">
+      <button class="preview-close" id="previewClose" type="button" aria-label="关闭预览">&times;</button>
+      <img class="preview-image" id="previewImage" alt="">
+      <div class="preview-caption" id="previewCaption"></div>
+    </div>
+  </div>
   <script>
     const token = "${escapedToken}";
     const encodedToken = "${encodedToken}";
     const content = document.getElementById("content");
     const expires = document.getElementById("expires");
+    const previewOverlay = document.getElementById("previewOverlay");
+    const previewClose = document.getElementById("previewClose");
+    const previewImage = document.getElementById("previewImage");
+    const previewCaption = document.getElementById("previewCaption");
     const initialDir = normalizeRelativeDir(new URLSearchParams(window.location.search).get("dir") || "");
     const initialItem = new URLSearchParams(window.location.search).get("item") || "";
 
@@ -145,15 +165,23 @@ function renderSharePage(token) {
       return index === -1 ? value : value.slice(index + 1);
     }
 
+    function isPreviewableImage(meta) {
+      return String((meta && meta.FileType) || "").toLowerCase().startsWith("image/");
+    }
+
     function renderFile(file) {
       const meta = file.metadata || {};
       const size = formatSize(meta.FileSizeBytes, meta.FileSize ? meta.FileSize + " MB" : "");
       const fileName = meta.FileName || basename(file.name) || "download";
       const fileUrl = file.url || "#";
+      const previewButton = isPreviewableImage(meta)
+        ? '<button class="button preview-button" type="button" data-preview-url="' + escapeText(fileUrl) + '" data-preview-name="' + escapeText(fileName) + '">预览</button>'
+        : "";
       return '<div class="row">' +
         '<div><div class="name">' + escapeText(fileName) + '</div>' +
         '<div class="meta">' + escapeText([meta.FileType, size].filter(Boolean).join(" · ")) + '</div></div>' +
         '<div class="row-actions">' +
+        previewButton +
         '<a class="button" href="' + escapeText(fileUrl) + '" target="_blank" rel="noopener">打开</a>' +
         '<a class="button secondary" href="' + escapeText(fileUrl) + '" download="' + escapeText(fileName) + '">下载</a>' +
         '</div>' +
@@ -182,6 +210,38 @@ function renderSharePage(token) {
         '</div>' +
       '</div>';
     }
+
+    function openPreview(url, fileName) {
+      if (!url || url === "#") return;
+      previewCaption.textContent = fileName || "";
+      previewImage.alt = fileName || "图片预览";
+      previewImage.src = url;
+      previewOverlay.hidden = false;
+      document.body.style.overflow = "hidden";
+      previewClose.focus();
+    }
+
+    function closePreview() {
+      previewOverlay.hidden = true;
+      previewImage.removeAttribute("src");
+      previewImage.alt = "";
+      previewCaption.textContent = "";
+      document.body.style.overflow = "";
+    }
+
+    content.addEventListener("click", event => {
+      const button = event.target.closest(".preview-button");
+      if (!button) return;
+      openPreview(button.dataset.previewUrl, button.dataset.previewName);
+    });
+
+    previewClose.addEventListener("click", closePreview);
+    previewOverlay.addEventListener("click", event => {
+      if (event.target === previewOverlay) closePreview();
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && !previewOverlay.hidden) closePreview();
+    });
 
     fetch(shareApiHref(initialDir, initialItem))
       .then(async response => {

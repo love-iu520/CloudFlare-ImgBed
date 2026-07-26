@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import {
   canShareAccessMetadata,
   createShareLink,
+  deleteShareLink,
   isPathWithinShare,
   listShareLinks,
   normalizeShareTarget,
@@ -241,6 +242,15 @@ describe('share links', () => {
     assert.equal(publicBody.file.name, 'photos/a.jpg');
     assert.equal(publicBody.file.url, `/file/photos%2Fa.jpg?shareToken=${encodeURIComponent(token)}`);
 
+    const activeDeleteResponse = await manageSharePathRequest({
+      env,
+      request: new Request(`https://img.example/api/manage/share/${created.share.id}?permanent=true`, {
+        method: 'DELETE',
+      }),
+      params: { path: created.share.id },
+    });
+    assert.equal(activeDeleteResponse.status, 409);
+
     const revokeResponse = await manageShareRequest({
       env,
       request: new Request(`https://img.example/api/manage/share?id=${created.share.id}`, {
@@ -255,6 +265,23 @@ describe('share links', () => {
       params: { path: token },
     });
     assert.equal(revokedPublicResponse.status, 410);
+
+    const deleteResponse = await manageSharePathRequest({
+      env,
+      request: new Request(`https://img.example/api/manage/share/${created.share.id}?permanent=true`, {
+        method: 'DELETE',
+      }),
+      params: { path: created.share.id },
+    });
+    assert.equal(deleteResponse.status, 200);
+
+    const deletedPublicResponse = await publicShareRequest({
+      env,
+      request: new Request(`https://img.example/api/share/${token}`),
+      params: { path: token },
+    });
+    assert.equal(deletedPublicResponse.status, 404);
+    assert.equal(await env.img_url.get('photos/a.jpg'), 'stored-file-reference');
   });
 
   it('resolves file shares created from displayed file names to real file ids', async () => {
@@ -505,6 +532,9 @@ describe('share links', () => {
     assert.match(html, /sharePageHref\(relativePath, itemId\)/, 'share page directory links should include the collection item id');
     assert.match(html, /function renderDirectory/, 'share page should render clickable directories');
     assert.match(html, /download="/, 'share page should expose a download action for files');
+    assert.match(html, /data-preview-url=/, 'share page should expose on-demand image preview buttons');
+    assert.match(html, /previewImage\.src = url/, 'share page should load the image only when preview opens');
+    assert.match(html, /previewImage\.removeAttribute\("src"\)/, 'share page should release the image after preview closes');
     assert.match(html, /返回/, 'share page should allow navigation back to a parent directory');
   });
 
@@ -580,6 +610,33 @@ describe('share links', () => {
       expiresAt: null,
     });
     assert.equal(updated.expiresAt, null);
+  });
+
+  it('permanently deletes D1 share rows and items without deleting files', async function () {
+    this.timeout(5000);
+
+    const d1 = new SqliteD1(':memory:');
+    d1.exec(readFileSync(new URL('../database/init.sql', import.meta.url), 'utf8'));
+    const env = { img_d1: d1 };
+    const created = await createShareLink(env, {
+      targets: [
+        { targetType: 'file', targetPath: 'photos/a.jpg' },
+        { targetType: 'directory', targetPath: 'photos/trip' },
+      ],
+      expiresInSeconds: 3600,
+    });
+
+    await revokeShareLink(env, created.share.id);
+    await deleteShareLink(env, created.share.id);
+
+    const shareRows = await d1.prepare('SELECT COUNT(*) AS count FROM share_links WHERE id = ?')
+      .bind(created.share.id)
+      .all();
+    const itemRows = await d1.prepare('SELECT COUNT(*) AS count FROM share_link_items WHERE share_id = ?')
+      .bind(created.share.id)
+      .all();
+    assert.equal(shareRows.results[0].count, 0);
+    assert.equal(itemRows.results[0].count, 0);
   });
 
   it('adds the share token column when writing to an older D1 share_links table', async function () {

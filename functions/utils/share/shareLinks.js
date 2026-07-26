@@ -205,6 +205,17 @@ export async function revokeShareLink(env, id, now = Date.now()) {
     };
 }
 
+export async function deleteShareLink(env, id) {
+    const db = getDatabase(env);
+    const existing = await db.getShareLinkById(id);
+    if (!existing) {
+        return null;
+    }
+
+    await db.deleteShareLink(id);
+    return serializeShareForManagement(existing);
+}
+
 export async function updateShareExpiry(env, id, options = {}, now = Date.now()) {
     if (!Object.prototype.hasOwnProperty.call(options, 'expiresAt') &&
         !Object.prototype.hasOwnProperty.call(options, 'expiresInSeconds')) {

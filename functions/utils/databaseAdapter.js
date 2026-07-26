@@ -238,6 +238,13 @@ class KVAdapter {
         return updated;
     }
 
+    async deleteShareLink(id) {
+        const share = await this.getShareLinkById(id);
+        if (!share) return false;
+        await this.delete(`manage@share@${id}`);
+        return true;
+    }
+
     async incrementShareView(id, viewedAt) {
         const share = await this.getShareLinkById(id);
         if (!share) return null;
