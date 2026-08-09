@@ -38,6 +38,8 @@ export async function errorHandling(context) {
 
 export async function telemetryData(context) {
   // errorHandling 已读取并记录遥测开关，避免同一上传请求重复访问数据库。
+  let transaction = null;
+
   if (context.data.telemetry === true) {
     try {
       const parsedHeaders = {};
@@ -75,18 +77,24 @@ export async function telemetryData(context) {
       context.data.sentry.setTag("method", context.request.method);
       context.data.sentry.setTag("redirect", context.request.redirect);
       context.data.sentry.setContext("request", data);
-      const transaction = context.data.sentry.startTransaction({ name: `${context.request.method} ${hostname}` });
+      transaction = context.data.sentry.startTransaction({ name: `${context.request.method} ${hostname}` });
       //add the transaction to the context
       context.data.transaction = transaction;
-      return await context.next();
     } catch (e) {
       logger.warn('Failed to attach telemetry data', e);
-    } finally {
-      context.data.transaction?.finish();
     }
   }
 
-  return context.next();
+  try {
+    // 下游业务异常必须继续向上传层或错误处理层传播，不能被当作遥测初始化错误吞掉。
+    return await context.next();
+  } finally {
+    try {
+      transaction?.finish();
+    } catch (e) {
+      logger.warn('Failed to finish telemetry transaction', e);
+    }
+  }
 }
 
 export async function traceData(context, span, op, name) {

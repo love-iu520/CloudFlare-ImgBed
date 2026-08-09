@@ -11,6 +11,12 @@ describe('worker route generation', () => {
     assert.match(workerIndex, /path: '\/dav\/'.*catchAll: true/);
   });
 
+  it('keeps the upload route behind upload middleware', () => {
+    assert.ok(workerIndex.includes(
+      "{ path: '/upload', module: upload_index, middlewares: [mw_upload] },",
+    ));
+  });
+
   it('keeps admin routes behind both API and manage middleware', () => {
     assert.match(workerIndex, /path: '\/api\/manage\/share'.*middlewares: \[mw_api, mw_api_manage\]/);
     assert.match(workerIndex, /path: '\/api\/manage\/share\/'.*middlewares: \[mw_api, mw_api_manage\].*catchAll: true/);

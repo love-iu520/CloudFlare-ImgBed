@@ -1,5 +1,5 @@
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { purgeCFCache, purgeRandomFileListCache, purgePublicFileListCache } from "../../../utils/purgeCache";
+import { purgeCFCache, purgeRandomFileListCache, purgePublicFileListCache } from "../../../utils/purgeCache.js";
 import {
     addFileToIndex,
     batchAddFilesToIndex,
@@ -39,6 +39,46 @@ export async function onRequest(context) {
     // 读取folder参数，判断是否为文件夹删除请求
     const folder = url.searchParams.get('folder');
     if (folder === 'true') {
+        const deletedFiles = [];
+        const trashedFiles = [];
+        const indexFiles = [];
+        const indexRemovalIds = new Set();
+        const failedFiles = [];
+        let indexUpdatesPromise = null;
+
+        const persistIndexUpdates = () => {
+            if (indexUpdatesPromise) return indexUpdatesPromise;
+
+            indexUpdatesPromise = (async () => {
+                const failures = [];
+
+                if (!permanent && indexFiles.length > 0) {
+                    const result = await batchAddFilesToIndex(context, indexFiles);
+                    if (!result?.success) {
+                        failures.push(`batch_add: ${result?.error || 'unknown error'}`);
+                    }
+                }
+                if (indexRemovalIds.size > 0) {
+                    const result = await batchRemoveFilesFromIndex(context, Array.from(indexRemovalIds));
+                    if (!result?.success) {
+                        failures.push(`batch_remove: ${result?.error || 'unknown error'}`);
+                    }
+                }
+
+                if (failures.length > 0) {
+                    throw new Error(`Failed to persist index updates (${failures.join('; ')})`);
+                }
+            })();
+
+            return indexUpdatesPromise;
+        };
+        const hasCompletedChanges = () => (
+            deletedFiles.length > 0 ||
+            trashedFiles.length > 0 ||
+            indexFiles.length > 0 ||
+            indexRemovalIds.size > 0
+        );
+
         try {
             params.path = decodeURIComponent(params.path);
             // 使用队列存储需要处理的文件夹
@@ -46,28 +86,35 @@ export async function onRequest(context) {
                 path: params.path.split(',').join('/')
             }];
 
-            const deletedFiles = [];
-            const indexFiles = [];
-            const missingFiles = [];
-            const failedFiles = [];
-
             while (folderQueue.length > 0) {
                 const currentFolder = folderQueue.shift();
-                const placeholderId = buildFolderPlaceholderId(currentFolder.path);
-                if (placeholderId) {
-                    const placeholderDeleted = await deleteFolderPlaceholder(env, placeholderId);
-                    if (placeholderDeleted) {
-                        deletedFiles.push(placeholderId);
-                    }
-                }
-
                 // 获取指定目录下的所有文件
                 const listUrl = new URL(`${url.origin}/api/manage/list?count=-1&dir=${currentFolder.path}`);
                 const listRequest = new Request(listUrl, {
                     headers: request.headers,
                 });
                 const listResponse = await fetch(listRequest);
+                if (!listResponse.ok) {
+                    throw new Error(`Failed to list folder ${currentFolder.path}: HTTP ${listResponse.status}`);
+                }
                 const listData = await listResponse.json();
+                if (!Array.isArray(listData.files) || !Array.isArray(listData.directories)) {
+                    throw new Error(`Invalid folder listing for ${currentFolder.path}`);
+                }
+
+                const placeholderId = buildFolderPlaceholderId(currentFolder.path);
+                if (placeholderId) {
+                    const placeholderResult = await deleteFolderPlaceholder(env, placeholderId);
+                    if (placeholderResult.success) {
+                        // 即使数据库记录已经不存在，也要清除残留的占位符索引。
+                        indexRemovalIds.add(placeholderId);
+                    } else {
+                        failedFiles.push(placeholderId);
+                    }
+                    if (placeholderResult.deleted) {
+                        deletedFiles.push(placeholderId);
+                    }
+                }
 
                 const files = listData.files;
 
@@ -82,10 +129,13 @@ export async function onRequest(context) {
 
                     if (result.success) {
                         deletedFiles.push(fileId);
-                        if (!permanent && result.metadata) {
+                        if (permanent) {
+                            indexRemovalIds.add(fileId);
+                        } else if (result.metadata) {
                             indexFiles.push({ fileId, metadata: result.metadata });
-                        } else if (!permanent && result.missing) {
-                            missingFiles.push(fileId);
+                            trashedFiles.push(fileId);
+                        } else if (result.missing) {
+                            indexRemovalIds.add(fileId);
                         }
                     } else {
                         failedFiles.push(fileId);
@@ -101,36 +151,39 @@ export async function onRequest(context) {
                 }
             }
 
-            // 批量从索引中删除文件
-            if (deletedFiles.length > 0) {
-                if (permanent) {
-                    waitUntil(batchRemoveFilesFromIndex(context, deletedFiles));
-                } else {
-                    if (indexFiles.length > 0) {
-                        waitUntil(batchAddFilesToIndex(context, indexFiles));
-                    }
-                    if (missingFiles.length > 0) {
-                        waitUntil(batchRemoveFilesFromIndex(context, missingFiles));
-                    }
-                }
-            }
+            await persistIndexUpdates();
 
             return new Response(JSON.stringify({
-                success: true,
+                success: failedFiles.length === 0,
+                partial: failedFiles.length > 0 && hasCompletedChanges(),
                 permanent,
                 deleted: permanent ? deletedFiles : [],
-                trashed: permanent ? [] : deletedFiles,
+                trashed: permanent ? [] : trashedFiles,
                 failed: failedFiles
             }), {
                 headers: { 'Content-Type': 'application/json', ...corsHeaders }
             });
 
         } catch (e) {
+            let responseError = e;
+            try {
+                await persistIndexUpdates();
+            } catch (indexError) {
+                if (indexError !== e) {
+                    responseError = new Error(`${e.message}; ${indexError.message}`);
+                }
+            }
+            const partial = hasCompletedChanges();
             return new Response(JSON.stringify({
                 success: false,
-                error: e.message
+                partial,
+                permanent,
+                deleted: permanent ? deletedFiles : [],
+                trashed: permanent ? [] : trashedFiles,
+                failed: failedFiles,
+                error: responseError.message
             }), {
-                status: 400,
+                status: partial ? 200 : 400,
                 headers: { 'Content-Type': 'application/json', ...corsHeaders }
             });
         }
@@ -271,15 +324,19 @@ async function deleteFolderPlaceholder(env, placeholderId) {
     try {
         const db = getDatabase(env);
         const item = await db.getWithMetadata(placeholderId);
-        if (!item?.metadata?.FolderPlaceholder) {
-            return false;
+        if (!item || item.value === null) {
+            return { success: true, deleted: false };
+        }
+        if (!item.metadata?.FolderPlaceholder) {
+            console.warn(`Folder placeholder ${placeholderId} is missing its marker metadata`);
+            return { success: false, deleted: false };
         }
 
         await db.delete(placeholderId);
-        return true;
+        return { success: true, deleted: true };
     } catch (error) {
         console.warn('Delete folder placeholder failed:', error.message);
-        return false;
+        return { success: false, deleted: false };
     }
 }
 

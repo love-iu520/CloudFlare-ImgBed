@@ -15,6 +15,7 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getDatabase } from '../utils/databaseAdapter.js';
 import { buildTelegramSourceGroup } from '../utils/sourceGroup.js';
 import { createLogger } from '../utils/logger.js';
+import { isUploadedFile } from './uploadValidation.js';
 
 const logger = createLogger('upload');
 
@@ -136,15 +137,14 @@ async function processFileUpload(context, formdata = null) {
     // 获取文件信息
     const time = new Date().getTime();
     const file = formdata.get('file');
+    if (!isUploadedFile(file)) {
+        return createResponse('Error: valid file field is required', { status: 400 });
+    }
+
     const fileType = file.type;
     let fileName = file.name;
     const fileSizeBytes = file.size; // 文件大小，单位字节
     const fileSize = (fileSizeBytes / 1024 / 1024).toFixed(2); // 文件大小，单位MB
-
-    // 检查fileType和fileName是否存在
-    if (fileType === null || fileType === undefined || fileName === null || fileName === undefined) {
-        return createResponse('Error: fileType or fileName is wrong, check the integrity of this file!', { status: 400 });
-    }
 
     // 提取图片尺寸
     let imageDimensions = null;
