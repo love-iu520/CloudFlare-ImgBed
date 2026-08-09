@@ -35,9 +35,21 @@ export async function onRequest(context) {
 
     const url = new URL(request.url);
     const permanent = url.searchParams.get('permanent') === 'true';
+    const force = url.searchParams.get('force') === 'true';
 
     // 读取folder参数，判断是否为文件夹删除请求
     const folder = url.searchParams.get('folder');
+    if (force && (!permanent || folder === 'true')) {
+        return new Response(JSON.stringify({
+            success: false,
+            error: 'force is only supported for permanent deletion of a single file',
+            code: 'INVALID_FORCE_SCOPE'
+        }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+    }
+
     if (folder === 'true') {
         const deletedFiles = [];
         const trashedFiles = [];
@@ -124,7 +136,7 @@ export async function onRequest(context) {
                     const cdnUrl = `https://${url.hostname}/file/${fileId}`;
 
                     const result = permanent
-                        ? { success: await deleteFile(env, fileId, cdnUrl, url) }
+                        ? await deleteFile(env, fileId, cdnUrl, url)
                         : await trashFile(env, fileId, cdnUrl, url);
 
                     if (result.success) {
@@ -197,26 +209,69 @@ export async function onRequest(context) {
         const cdnUrl = `https://${url.hostname}/file/${fileId}`;
 
         const result = permanent
-            ? { success: await deleteFile(env, fileId, cdnUrl, url) }
+            ? await deleteFile(env, fileId, cdnUrl, url, { force })
             : await trashFile(env, fileId, cdnUrl, url);
 
         if (!result.success) {
-            throw new Error('Delete file failed');
+            return new Response(JSON.stringify({
+                success: false,
+                error: result.error || 'Delete file failed',
+                code: result.code || 'DELETE_FILE_FAILED',
+                provider: result.provider,
+                forceable: result.forceable === true,
+                fileId,
+                permanent
+            }), {
+                status: result.status || 400,
+                headers: { 'Content-Type': 'application/json', ...corsHeaders }
+            });
         } else if (permanent) {
             // 从索引中删除文件
-            waitUntil(removeFileFromIndex(context, fileId));
+            if (result.forced) {
+                const indexResult = await removeFileFromIndex(context, fileId);
+                if (!indexResult?.success) {
+                    return new Response(JSON.stringify({
+                        success: false,
+                        partial: true,
+                        error: 'File was removed locally, but index cleanup failed',
+                        code: 'INDEX_REMOVE_FAILED',
+                        fileId,
+                        permanent,
+                        forced: true,
+                        remoteDeleted: false,
+                        localDeleted: true,
+                        indexRemoved: false
+                    }), {
+                        status: 500,
+                        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+                    });
+                }
+            } else {
+                waitUntil(removeFileFromIndex(context, fileId));
+            }
         } else if (result.metadata) {
             waitUntil(addFileToIndex(context, fileId, result.metadata));
         } else if (result.missing) {
             waitUntil(removeFileFromIndex(context, fileId));
         }
 
-        return new Response(JSON.stringify({
+        const responseBody = {
             success: true,
             fileId: fileId,
             permanent,
             trashed: !permanent
-        }), {
+        };
+        if (permanent) {
+            responseBody.forced = result.forced === true;
+            responseBody.remoteDeleted = result.remoteDeleted !== false;
+            responseBody.localDeleted = true;
+            if (result.forced) {
+                responseBody.indexRemoved = true;
+                responseBody.warningCode = 'TELEGRAM_REMOTE_DELETE_SKIPPED';
+            }
+        }
+
+        return new Response(JSON.stringify(responseBody), {
             headers: { 'Content-Type': 'application/json', ...corsHeaders }
         });
     } catch (e) {
@@ -253,16 +308,20 @@ async function trashFile(env, fileId, cdnUrl, url) {
 }
 
 // 删除单个文件的核心函数
-async function deleteFile(env, fileId, cdnUrl, url) {
+async function deleteFile(env, fileId, cdnUrl, url, options = {}) {
+    const force = options.force === true;
+    let forced = false;
+    let remoteDeleted;
+
     try {
         // 读取图片信息
         const db = getDatabase(env);
         const img = await db.getWithMetadata(fileId);
 
         // 如果文件记录不存在，直接返回成功（幂等删除）
-        if (!img) {
+        if (!img || img.value === null) {
             console.warn(`File ${fileId} not found in database, skipping delete`);
-            return true;
+            return { success: true, missing: true, forced: false };
         }
 
         // 如果是R2渠道的图片，需要删除R2中对应的图片
@@ -283,8 +342,24 @@ async function deleteFile(env, fileId, cdnUrl, url) {
 
         // Telegram 渠道的图片，需要删除 Telegram 频道中对应的消息
         if (img.metadata?.Channel === 'TelegramNew') {
-            const deleted = await deleteTelegramFile(env, img);
-            if (!deleted) return false;
+            const telegramResult = await deleteTelegramFile(env, img);
+            if (!telegramResult.success) {
+                if (!force || !telegramResult.forceable) {
+                    return {
+                        success: false,
+                        error: telegramResult.error,
+                        code: telegramResult.code,
+                        provider: 'telegram',
+                        forceable: telegramResult.forceable === true,
+                        status: 409
+                    };
+                }
+
+                forced = true;
+                remoteDeleted = false;
+            } else {
+                remoteDeleted = telegramResult.remoteDeleted !== false;
+            }
         }
 
         // HuggingFace 渠道的图片，需要删除 HuggingFace 中对应的文件
@@ -303,10 +378,16 @@ async function deleteFile(env, fileId, cdnUrl, url) {
 
         await purgeFileCaches(env, fileId, cdnUrl, url);
 
-        return true;
+        return { success: true, forced, remoteDeleted };
     } catch (e) {
         console.error('Delete file failed:', e);
-        return false;
+        return {
+            success: false,
+            error: 'Delete file failed',
+            code: 'DELETE_FILE_FAILED',
+            forceable: false,
+            status: 400
+        };
     }
 }
 
@@ -380,13 +461,30 @@ async function deleteS3File(env, img) {
 // 删除 Telegram 渠道的图片（删除 Telegram 消息）
 async function deleteTelegramFile(env, img) {
     const db = getDatabase(env);
-    const telegramCredentials = await resolveTelegramCredentials(db, env, img.metadata);
+    let telegramCredentials;
+    try {
+        telegramCredentials = await resolveTelegramCredentials(db, env, img.metadata);
+    } catch (error) {
+        console.error('Telegram configuration lookup failed:', error);
+        return {
+            success: false,
+            error: 'Telegram channel configuration could not be loaded',
+            code: 'TELEGRAM_CONFIGURATION_FAILED',
+            forceable: false
+        };
+    }
+
     const botToken = telegramCredentials.botToken;
     const chatId = telegramCredentials.chatId;
 
     if (!botToken || !chatId) {
         console.warn('Telegram file missing channel credentials for deletion');
-        return false;
+        return {
+            success: false,
+            error: 'Telegram channel credentials are unavailable',
+            code: 'TELEGRAM_CREDENTIALS_MISSING',
+            forceable: false
+        };
     }
 
     const telegramAPI = new TelegramAPI(botToken, telegramCredentials.proxyUrl || '');
@@ -394,17 +492,22 @@ async function deleteTelegramFile(env, img) {
 
     if (messageIds.length === 0) {
         console.warn('Telegram file missing message metadata for deletion; database record will still be removed');
-        return true;
+        return { success: true, remoteDeleted: true };
     }
 
     try {
         for (const messageId of messageIds) {
             await telegramAPI.deleteMessage(chatId, messageId);
         }
-        return true;
+        return { success: true, remoteDeleted: true };
     } catch (error) {
         console.error("Telegram Delete Failed:", error);
-        return false;
+        return {
+            success: false,
+            error: 'Telegram message could not be deleted',
+            code: 'TELEGRAM_DELETE_FAILED',
+            forceable: true
+        };
     }
 }
 
