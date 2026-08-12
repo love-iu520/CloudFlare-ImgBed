@@ -1,148 +1,204 @@
-# CloudFlare-ImgBed 项目长期上下文
+# 项目稳定上下文
 
-本文件记录 `D:\Dev\Projects\Practice\CloudFlare-ImgBed` 的长期项目事实和维护约定。它不会自动更新；当架构、部署、数据库、核心业务规则、关键命令或长期有效的已知坑点变化时，应同步更新本文件。
+## 1. 架构概览
 
-## 项目定位
+- **主要运行形态**：同一套 Functions 业务实现运行于 Cloudflare Pages Functions、Cloudflare Workers 和 Docker / Node.js 三种形态。
+- **核心结构**：`functions/` 提供业务路由与共享逻辑；`deploy/worker/` 将其生成成 Worker 路由表；`deploy/server/` 用 Hono、SQLite、本地文件系统和进程内 Cache 适配 Node.js；`frontend-dist/` 向三种运行形态提供静态 SPA 产物。
+- **数据与存储**：元数据和系统状态可落在 Cloudflare KV、D1 或 Node.js 下的 SQLite 兼容层；文件内容由 R2、本地 R2 模拟或配置的第三方存储渠道承载。
+- **前端来源**：完整前端源码属于独立仓库 `MarSeventh/Sanyue-ImgHub`，本仓库只保存经构建并同步的 `frontend-dist/`。
 
-- 本仓库是 CloudFlare ImgBed 文件托管服务，目标是提供开源文件托管、图床和管理面板能力。
-- 项目支持上传、读取、管理、删除、目录、图片审查、随机图、公共图库、分享链接、WebDAV 和 RESTful API。
-- 支持多种部署形态：Cloudflare Pages Functions、Cloudflare Workers、Docker/Node.js。
-- 支持多种存储渠道：Telegram、Discord、Cloudflare R2、S3、Hugging Face、WebDAV 和外链记录。
-- 仓库内包含 `frontend-dist` 静态前端产物，不包含完整前端源码；README 指向外部前端项目 `MarSeventh/Sanyue-ImgHub`，本机前端源码仓库位于 `D:\Dev\Projects\Practice\Sanyue-ImgHub`。
+本文中的 **Owner** 表示负责生命周期或写入语义的逻辑模块，不表示个人或团队所有权；仓库当前没有单独的 CODEOWNERS 事实源。
 
-## 技术栈与运行方式
+## 2. 模块索引
 
-- 包管理器：npm，仓库包含 `package-lock.json`。
-- 运行环境：Dockerfile 和 GitHub Actions 使用 Node.js 22。
-- 模块系统：`package.json` 设置 `"type": "module"`，代码以 ES Modules 为主。
-- Cloudflare 本地开发：`npm start` 使用 `wrangler pages dev ./frontend-dist --kv "img_url" --r2 "img_r2" --port 8080 --persist-to ./data`。
-- 前端源码本地开发：在 `D:\Dev\Projects\Practice\Sanyue-ImgHub` 运行 `npm run serve`，默认监听 `3000`，`.env.development` 指向后端 `http://127.0.0.1:8080`。
-- 前端源码构建：在 `D:\Dev\Projects\Practice\Sanyue-ImgHub` 运行 `npm run build`，输出 `dist`，确认后同步到本仓库 `frontend-dist`。
-- Docker/Node.js 模式：`npm run start:docker` 使用 `deploy/server/index.js`，通过 Hono 模拟 Pages Functions 路由，用 SQLite 模拟 D1，用本地文件系统模拟 R2。
-- Docker/Node.js 模式使用有界进程内 Cache API（默认最多 100 项、32 MiB），并优先返回 `frontend-dist` 已有的 gzip 预压缩资源；带内容哈希的静态资源使用长期 immutable 缓存，入口页和未哈希热修复资源要求重新验证。
-- Worker 部署：`npm run deploy:worker` 先运行 `deploy/worker/generate-routes.js`，再使用 `wrangler deploy --config deploy/worker/wrangler.toml`。
-- 测试框架：Mocha，默认命令为 `npm test`。
+| ID | 模块 | 主要位置 | 核心职责 |
+|---|---|---|---|
+| `MOD-FUNCTIONS` | Functions 业务核心 | `functions/` | 处理 API、上传、读取、鉴权、分享、WebDAV、随机访问和系统配置语义 |
+| `MOD-DATA` | 数据与存储 | `database/`、`functions/utils/` 中的数据 / 存储适配、`deploy/server/` 中的本地模拟 | 维护 schema、元数据访问、索引及文件存储适配 |
+| `MOD-NODE-RUNTIME` | Docker / Node.js 运行时 | `deploy/server/`、`Dockerfile`、`docker-compose.yml` | 将 Functions、D1、R2、Cache 和静态资源适配到 Node.js |
+| `MOD-WORKER-RUNTIME` | Workers 运行时 | `deploy/worker/` | 从 Functions 生成 Worker 路由并提供 Wrangler 部署配置 |
+| `MOD-FRONTEND-DELIVERY` | 前端源码与部署产物交付 | 独立前端仓库、`frontend-dist/`、`docs/FRONTEND_DIST_SYNC.md` | 维护前端源码到本仓部署产物的边界和同步关系 |
+| `MOD-AUTOMATION` | 交付与仓库自动化 | `.github/workflows/` | 负责 Worker 部署、Docker 镜像、上游同步和 Release 同步 |
 
-## 重要目录
+## 3. 模块详情
 
-- `functions`：Cloudflare Pages Functions 业务逻辑和 API 路由源目录。
-- `functions/api`：用户配置、鉴权、管理端、公开列表、分享链接、Bing 壁纸等 API。
-- `functions/upload`：上传入口、分块上传、合并和上传工具。
-- `functions/file`：文件读取、访问控制、缓存头、阻止图和白名单图回退逻辑。
-- `functions/dav`：WebDAV 入口。
-- `functions/random`：随机文件访问入口。
-- `functions/utils`：数据库适配、系统配置、鉴权、索引、缓存清理、元数据、分享链接和各存储渠道客户端。
-- `frontend-dist`：静态 SPA 产物，包含 `index.html`、CSS、JS、图片、字体和 gzip 文件。
-- `D:\Dev\Projects\Practice\Sanyue-ImgHub`：相邻前端源码仓库，包含 Vue 源码、前端 `public` 静态文件和构建输出 `dist`。
-- `deploy/server`：Docker/Node.js 运行时适配层，包含 Hono 服务、SQLite D1 模拟和本地 R2 模拟。
-- `deploy/worker`：Workers 部署适配层、路由生成脚本和 wrangler 配置生成脚本。
-- `database`：D1/SQLite 初始化 SQL 和迁移脚本。
-- `database/migrations/README.md`：数据库迁移编号、运行时兼容和新增迁移 checklist。
-- `test`：Mocha 测试，目前覆盖元数据辅助、分享链接、日志脱敏、Worker 路由静态检查和导航热修复静态检查。
-- `docs/FRONTEND_DIST_SYNC.md`：前端源码构建并同步到 `frontend-dist` 的维护 checklist。
-- `readme`：README 引用的图片资源。
-- `data`：本地运行数据目录，被 `.gitignore` 忽略。
-- `.wrangler`：Wrangler 本地状态目录，被 `.gitignore` 忽略。
+### MOD-FUNCTIONS — Functions 业务核心
 
-## 核心运行流程
+- **职责**：维护跨运行时共享的 HTTP 路由、业务规则和请求级编排。
+- **主要位置**：`functions/api/`、`functions/upload/`、`functions/file/`、`functions/share/`、`functions/random/`、`functions/dav/`、`functions/utils/`。
+- **主要入口**：
+  - 上传：`functions/upload/index.js`
+  - 文件读取：`functions/file/[[path]].js`、`functions/file/fileTools.js`
+  - 管理 API：`functions/api/manage/`
+  - 分享管理 / 公开访问：`functions/api/manage/share/`、`functions/api/share/[[path]].js`、`functions/share/[[path]].js`
+  - 随机访问与 WebDAV：`functions/random/index.js`、`functions/dav/[[path]].js`
+  - 共享鉴权、配置、日志与缓存失效：`functions/utils/auth/`、`functions/utils/sysConfig.js`、`functions/utils/logger.js`、`functions/utils/purgeCache.js`
+- **核心协作**：请求路由 → 鉴权 / 配置 → `MOD-DATA` → 响应与缓存策略。
+- **主要依赖**：`MOD-DATA` 及 Cloudflare Pages Functions 风格的请求上下文。
+- **主要消费者**：Pages 直接消费；`MOD-NODE-RUNTIME` 动态加载；`MOD-WORKER-RUNTIME` 生成静态路由表。
+- **稳定边界**：共享产品语义属于本模块；运行时模块只负责平台适配，不维护平行业务分叉。
+- **典型任务入口**：上传见 `FLOW-UPLOAD`，访问控制见 `FLOW-FILE-ACCESS`，分享见 `FLOW-SHARE`，删除见 `FLOW-FILE-DELETION`。
 
-### 请求路由
+### MOD-DATA — 数据与存储
 
-- Pages Functions 模式直接使用 `functions/` 目录结构作为路由。
-- Docker/Node.js 模式由 `deploy/server/index.js` 扫描并动态导入 `functions/`，支持精确路由、`index.js`、`[[path]].js` 和 `_middleware.js`。
-- Workers 模式由 `deploy/worker/generate-routes.js` 扫描 `functions/` 并生成 `deploy/worker/index.js` 静态路由表。
-- `_middleware.js` 按目录层级组成中间件链，`functions/api/_middleware.js` 会检查数据库配置，`functions/api/manage/_middleware.js` 会执行管理端鉴权和 no-store 缓存控制。
+- **职责**：维护关系型 schema、KV / D1 统一访问、索引与元数据写入，以及文件存储渠道适配。
+- **主要位置**：`database/init.sql`、`database/migrations/`、`functions/utils/databaseAdapter.js`、`functions/utils/d1Database.js`、`functions/utils/indexManager.js`、`functions/utils/storage/`、`deploy/server/sqliteD1.js`、`deploy/server/r2Storage.js`。
+- **主要入口**：
+  - 新库 schema：`database/init.sql`
+  - 旧库演进：`database/migrations/`
+  - KV / D1 选择与统一接口：`functions/utils/databaseAdapter.js`
+  - D1 实现与旧库兼容：`functions/utils/d1Database.js`
+  - Node.js D1 / R2 模拟：`deploy/server/sqliteD1.js`、`deploy/server/r2Storage.js`
+- **核心协作**：`MOD-FUNCTIONS` 定义数据语义，本模块把语义映射到 KV、D1 / SQLite 和选定存储渠道。
+- **主要依赖**：Cloudflare KV / D1 / R2 binding、SQLite、本地文件系统及外部存储服务。
+- **主要消费者**：`MOD-FUNCTIONS`、`MOD-NODE-RUNTIME`。
+- **稳定边界**：新安装的完整 SQL 结构以 `database/init.sql` 为准；旧数据库升级以 `database/migrations/` 为准；KV 分享数据使用 JSON 记录，不执行 SQL 迁移。
+- **典型任务入口**：结构变更见 `FLOW-SCHEMA-EVOLUTION`；迁移编号与兼容说明见 `database/migrations/README.md`。
 
-### 上传流程
+### MOD-NODE-RUNTIME — Docker / Node.js 运行时
 
-- 上传入口为 `functions/upload/index.js`。
-- 上传前读取安全配置、上传渠道配置和页面配置，并执行用户上传权限检查。
-- 上传路径通过 `sanitizeUploadFolder` 做路径穿越和特殊字符处理。
-- 支持普通上传、分块上传初始化、分块上传、分块合并和清理请求。
-- 存储渠道包括 Cloudflare R2、S3、Telegram、Discord、Hugging Face、WebDAV 和 External。
-- 上传成功后写入数据库元数据，调用索引更新，并清理相关 CDN、随机文件列表和公开文件列表缓存。
+- **职责**：在 Node.js 中承载静态资源和 Functions 路由，并模拟 Cloudflare 平台能力。
+- **主要位置**：`deploy/server/`、`Dockerfile`、`docker-compose.yml`。
+- **主要入口**：`deploy/server/register.mjs` 注册 loader，`deploy/server/index.js` 启动 Hono 服务；`deploy/server/sqliteD1.js`、`r2Storage.js`、`memoryCache.js` 提供 D1、R2 和 Cache 适配。
+- **核心协作**：Node loader 动态导入 `MOD-FUNCTIONS` → Hono 路由 / 中间件 → `MOD-DATA` 本地适配 → `frontend-dist/` 静态资源。
+- **主要依赖**：`MOD-FUNCTIONS`、`MOD-DATA`、`MOD-FRONTEND-DELIVERY`，以及 Hono、`@hono/node-server`、`better-sqlite3`。
+- **主要消费者**：直接 Node.js 运行和 Docker 镜像。
+- **稳定边界**：直接运行默认监听容器 / 进程端口 `8080`；`docker-compose.yml` 当前映射宿主机 `7658` 到容器 `8080`。进程内 Cache 有界，静态资源可优先使用预压缩 gzip；哈希资源可长期缓存，入口页和未哈希热修复资源要求重新验证。
+- **典型任务入口**：路由加载与静态服务从 `deploy/server/index.js` 开始；跨运行时关系见 `FLOW-RUNTIME-ROUTING`。
 
-### 文件读取与访问控制
+### MOD-WORKER-RUNTIME — Workers 运行时
 
-- 文件读取入口主要在 `functions/file/[[path]].js` 和 `functions/file/fileTools.js`。
-- 文件响应会设置 `Content-Disposition`、CORS、Range 和 Cache-Control 相关头。
-- `returnWithCheck` 根据白名单模式、管理预览、分享 token、`ListType` 和 `Label` 判断访问结果。
-- `ListType = Block`、`ListType = Trash` 或 `Label = adult` 等场景不能被普通公开访问绕过。
-- 分享链接访问使用私有缓存策略，避免公开缓存泄漏。
+- **职责**：把 Functions 路由树编译为单 Worker 入口，并维护 Worker 部署配置生成。
+- **主要位置**：`deploy/worker/`。
+- **主要入口**：`deploy/worker/generate-routes.js`、`deploy/worker/generate-toml.js`、`deploy/worker/wrangler.toml`。
+- **核心协作**：扫描 `MOD-FUNCTIONS` → 组合目录中间件、精确路由与 catch-all → 生成 `deploy/worker/index.js` → Wrangler 部署。
+- **主要依赖**：`MOD-FUNCTIONS`、`MOD-FRONTEND-DELIVERY` 和 Cloudflare Workers bindings。
+- **主要消费者**：`MOD-AUTOMATION` 的 Worker 部署工作流和本地部署入口。
+- **稳定边界**：`deploy/worker/index.js` 是生成物；生成器跳过 `functions/utils/`，只纳入导出 `onRequest` 的 JavaScript 路由文件。
+- **典型任务入口**：路由生成从 `deploy/worker/generate-routes.js` 开始；三运行时对齐见 `FLOW-RUNTIME-ROUTING`。
 
-### 管理与公开能力
+### MOD-FRONTEND-DELIVERY — 前端源码与部署产物交付
 
-- 管理端 API 位于 `functions/api/manage`，覆盖文件列表、删除、移动、重命名、白名单/黑名单、回收站恢复、标签、批量索引、系统配置、来源组、Telegram 导入和分享管理。
-- 分享管理 API 支持创建、列表、撤销、更新有效期和永久删除记录；有效分享必须先撤销才能永久删除，删除分享记录及其 item 不会删除原文件。新分享记录保存完整 token 以便管理员复制历史链接，同时保留 token hash 用于访问校验。
-- 分享链接支持单文件、单目录和多目标集合分享；多目标创建使用 `targets` 数组，一个 token 可包含多个文件和目录 item。
-- 目录分享不会在创建时展开成文件快照，而是按目录前缀动态列出当前目录内容；多目标集合中的目录 item 也沿用该动态前缀浏览规则。
-- 公开分享页对图片文件提供点击后加载的弹层预览，并保留打开和下载操作。
-- 公开能力包括 `/api/public/list`、`/random`、`/share/*`、`/api/share/*` 和 `/dav/*`。
-- 随机 API 的基础地址为 `/random`；允许目录留空时覆盖全部目录，配置多个允许目录后，不传 `dir` 也会在这些目录的并集中随机，显式传入 `dir` 时仍执行目录边界校验。
-- `/random?type=img` 会流式透传文件响应，不再把整张图片读入 Blob；随机候选列表和公开列表使用 24 小时内部缓存，目录内容变化时会同步失效相关祖先目录缓存。
-- 系统配置由 `functions/api/manage/sysConfig` 与 `functions/utils/sysConfig.js` 协作读取，配置主要持久化在数据库中。
+- **职责**：维护独立前端源码与本仓部署产物之间的 Source of Truth、构建和同步关系。
+- **主要位置**：独立仓库 `MarSeventh/Sanyue-ImgHub`；本仓 `frontend-dist/`；流程说明 `docs/FRONTEND_DIST_SYNC.md`。
+- **主要入口**：前端源码仓的 `src/`、`public/`、`public/index.html`；本仓的 `frontend-dist/index.html`、`frontend-dist/js/`、`frontend-dist/css/`。
+- **核心协作**：前端源码 → 前端构建 `dist/` → 产物审查 → 本仓 `frontend-dist/` → Pages / Worker / Node.js 静态资源消费者。
+- **主要依赖**：独立前端仓的 Vue 构建链。
+- **主要消费者**：三种运行形态及 `MOD-AUTOMATION`。
+- **稳定边界**：长期源码 Source of Truth 在独立前端仓；本仓不包含完整前端源码。导航热修复和随机 API 帮助脚本的源码位于前端仓 `public/`，本仓仅保存构建结果及对应 gzip 文件。
+- **典型任务入口**：同步关系见 `FLOW-FRONTEND-SYNC`，详细 checklist 见 `docs/FRONTEND_DIST_SYNC.md`。
 
-## 数据库与存储
+### MOD-AUTOMATION — 交付与仓库自动化
 
-- 数据库适配层位于 `functions/utils/databaseAdapter.js`，提供 KV 和 D1 的统一接口。
-- `database/init.sql` 创建 `files`、`settings`、`index_operations`、`index_metadata`、`other_data`、`share_links` 和 `share_link_items` 表。
-- `share_links` 保存 token、过期、撤销、访问统计和旧兼容主目标；`share_link_items` 保存同一分享 token 下的多个文件或目录 item。
-- `database/migrations` 保存增量迁移，目前包含 `tags` 字段、`share_links` 表迁移和 `v2.7.7_add_share_link_items.sql`。
-- D1 逻辑封装在 `functions/utils/d1Database.js`；Docker/Node.js 模式使用 `deploy/server/sqliteD1.js` 模拟 D1。
-- D1 旧库如果已有 `share_links` 表但缺少 `token` 列，`functions/utils/d1Database.js` 会在写入分享链接前自动补列；迁移文件仍用于部署时显式升级。
-- D1 适配层会在写入或读取分享 item 时确保 `share_link_items` 表存在；KV 模式把 item 列表内嵌在 `manage@share@<id>` 分享记录中。
-- 本地 Docker/Node.js 模式使用 `data/database.sqlite` 和 `data/r2`，这些属于运行数据，不应提交。
-- 存储渠道客户端位于 `functions/utils/storage`。
-- 运行日志统一优先使用 `functions/utils/logger.js`，默认只输出 warn/error，并对 token、Authorization、cookie、签名 URL、SHA256/OID 等敏感字段做脱敏；上传和第三方存储调试不要直接打印完整配置、第三方 API 响应体或签名上传地址。
+- **职责**：维护代码同步后的部署、镜像发布和跨仓 Release 同步。
+- **主要位置**：`.github/workflows/`。
+- **主要入口**：
+  - `deploy-worker.yml`：仅 fork 仓库且配置 Cloudflare Secrets 时部署 Worker。
+  - `docker-publish.yml`：仅原仓库 `MarSeventh/CloudFlare-ImgBed` 构建并推送多架构 Docker 镜像。
+  - `sync-upstream.yml`：fork 仓库定时 / 手动同步上游，成功后触发 Worker 部署。
+  - `sync-release.yml`：原仓库 Release 创建、发布或编辑时同步到 `MarSeventh/Sanyue-ImgHub`。
+- **核心协作**：GitHub 事件 → 对应工作流 → `MOD-WORKER-RUNTIME`、`MOD-NODE-RUNTIME` 或外部前端仓。
+- **主要依赖**：GitHub Actions、仓库 Secrets、Cloudflare 与 Docker Hub。
+- **主要消费者**：fork 部署用户、原仓库镜像和 Release 维护流程。
+- **稳定边界**：自动化文件定义触发条件和外部消费者；凭据只由 GitHub Secrets 注入。
 
-## 部署与自动化
+## 4. 关键跨模块流程
 
-- Cloudflare Pages 用户需把构建输出目录配置为 `frontend-dist`。
-- 前端源码修改后，应先在 `Sanyue-ImgHub` 构建并检查 `dist`，再同步到本仓库 `frontend-dist` 用于 Pages、Workers 或 Docker/Node.js 部署。
-- 页面背景配置兼容直接粘贴单张图片 URL、`bing` 和 JSON URL 数组；保存页面配置后应刷新公开 `userConfig`，Bing URL 列表按需加载而不是等待所有图片预加载完成。
-- 随机 API 设置页会展示基于当前域名的 `/random`、直接图片、自适应图片和 URL 文本地址，并支持复制；部署产物兼容层位于 `frontend-dist/js/random-api-help.js`，源码位于相邻前端仓库 `public/js/random-api-help.js`。
-- 前端产物同步流程记录在 `docs/FRONTEND_DIST_SYNC.md`；修改 `frontend-dist` 中 JS/CSS 时需要确认对应 `.gz` 文件同步。
-- Worker 配置模板在 `deploy/worker/wrangler.toml`，GitHub Actions 可通过 Secrets 运行 `deploy/worker/generate-toml.js` 动态生成配置。
-- `.github/workflows/deploy-worker.yml` 只在 fork 仓库且配置 Cloudflare Secrets 时部署 Worker。
-- `.github/workflows/docker-publish.yml` 仅在原仓库 `MarSeventh/CloudFlare-ImgBed` 构建并推送 Docker 镜像。
-- `.github/workflows/sync-upstream.yml` 用于 fork 仓库定时同步上游，并在同步后触发 Worker 部署。
+### FLOW-RUNTIME-ROUTING — 三运行时请求路由
 
-## 近期提交脉络
+- **目的**：让同一套 Functions 路由和中间件在 Pages、Workers 与 Node.js 中保持共享业务语义。
+- **触发 / 入口**：HTTP 请求或 Worker 路由生成。
+- **参与模块**：`MOD-FUNCTIONS` → `MOD-WORKER-RUNTIME` / `MOD-NODE-RUNTIME`。
+- **稳定主链路**：
+  - Pages：平台直接按 `functions/` 目录映射路由。
+  - Workers：`generate-routes.js` 扫描 Functions 并生成单入口路由表。
+  - Node.js：loader 动态导入 Functions，由 Hono 组合路由和中间件。
+- **关键交接**：目录级 `_middleware.js` 按层级组成链；`functions/api/_middleware.js` 负责数据库配置前置检查，`functions/api/manage/_middleware.js` 负责管理鉴权与管理响应缓存控制。
+- **外部边界**：Cloudflare Pages / Workers 请求模型、Node.js / Hono。
+- **典型影响范围**：Functions 路由形态、生成器、Node loader、中间件顺序与跨运行时测试。
 
-- 2026-07-06：当前分支 `main` 最新提交为 `完善分享目标选择与分享管理`。
-- 2026-07-06：近期提交包含分享按钮 fallback、带过期时间的分享链接、新建文件夹、回收站批量操作和删除确认弹窗。
-- 2026-07-06：仓库已有导航热修复静态测试，校验 `frontend-dist/js/nav-hotfix.js` 和 `frontend-dist/css/nav-hotfix.css` 中的管理导航、回收站、分享和上传页布局约束。
+### FLOW-UPLOAD — 上传与持久化
 
-## 已知项目约定与坑点
+- **目的**：把上传请求安全地写入选定存储渠道，并同步元数据、索引和缓存。
+- **触发 / 入口**：`functions/upload/index.js` 的普通上传、分块初始化、分块写入、合并或清理请求。
+- **参与模块**：`MOD-FUNCTIONS` → `MOD-DATA`。
+- **稳定主链路**：读取安全 / 渠道 / 页面配置 → 校验上传权限 → 规范化目标路径 → 写入选定存储 → 写入元数据与索引 → 失效相关 CDN、随机列表和公开列表缓存。
+- **关键交接**：目标路径先经过 `sanitizeUploadFolder`；存储结果转换为统一文件元数据后进入数据库和索引。
+- **外部边界**：Cloudflare R2、S3、Telegram、Discord、Hugging Face、WebDAV 与外链记录。
+- **典型影响范围**：上传入口、存储适配、元数据、索引和缓存失效。
 
-- `deploy/worker/index.js` 文件头明确标注自动生成；修改 Workers 路由时优先修改 `functions/` 或 `deploy/worker/generate-routes.js`。
-- `frontend-dist` 是静态产物目录，修改其中 JS/CSS 时要避免无关产物抖动，并保持 `.gz` 文件同步。
-- 长期前端功能不要直接写进 `frontend-dist`；应修改相邻前端源码仓库 `Sanyue-ImgHub` 中的 `src` 或 `public`，构建后再同步产物。
-- 导航热修复源码已迁移到 `Sanyue-ImgHub/public/js/nav-hotfix.js` 和 `Sanyue-ImgHub/public/css/nav-hotfix.css`，`public/index.html` 会在构建时引用它们并产出到 `dist/js`、`dist/css`。
-- 当前仓库没有 `src` 目录；不要把外部前端源码约定误写成本仓库事实。
-- `.gitignore` 忽略 `data`、`.wrangler`、SQLite 文件、`node_modules` 和若干本地 IDE/Agent 目录。
-- 数据库配置可使用 KV `img_url` 或 D1 `img_d1`；修改适配层时要同时确认 Pages、Workers 和 Docker/SQLite 三种运行模式。
-- `deploy/worker/generate-toml.js` 会从环境变量读取 Cloudflare binding 信息，并对输出日志中的敏感字段做脱敏；不要在文档或日志中打印真实凭据。
-- 业务代码日志也应通过 `functions/utils/logger.js` 输出；不要用 `console.log` 直接打印 token、cookie、Authorization、渠道完整配置、签名 URL、Hugging Face LFS batch/preupload 完整响应或第三方 API 完整响应体。
-- 管理端 API 默认应返回 `private, no-store, max-age=0`，不要让管理数据被公开缓存。
-- 分享链接应校验过期、撤销、目标路径范围和文件元数据状态，不能绕过 Block、Trash 或 adult 限制；管理接口可返回完整分享 URL，公开接口不应泄露管理数据。
-- Telegram、Discord、Hugging Face、S3、WebDAV 等渠道配置包含敏感凭据，读取和调试时只输出脱敏摘要。
+### FLOW-FILE-ACCESS — 文件读取与访问控制
 
-## 推荐验证方式
+- **目的**：按请求身份、分享授权和文件元数据状态返回文件或受限响应。
+- **触发 / 入口**：`functions/file/[[path]].js`、公开列表、随机访问、管理预览或分享访问。
+- **参与模块**：`MOD-FUNCTIONS` → `MOD-DATA`。
+- **稳定主链路**：解析路径与请求上下文 → 读取元数据 / 存储位置 → 校验管理、公开或分享访问范围 → 应用 `ListType`、`Label` 与白名单策略 → 返回文件、阻止图或拒绝响应。
+- **关键交接**：`functions/file/fileTools.js` 负责文件响应与访问检查；公开、管理和分享场景使用不同缓存策略。
+- **外部边界**：存储渠道、HTTP Range / CORS / Content-Disposition / Cache-Control。
+- **典型影响范围**：鉴权、分享 token、Block / Trash / adult 状态、缓存头和文件回退。
 
-- 文档-only 修改：`git diff --check`。
-- 常规工具或 API 修改：`npm test`。
-- Worker 路由静态检查：`npm run test:routes`。
-- 分享链接修改：`npx mocha test\share-links.test.js`。
-- 元数据、来源组、回收站、文件夹占位符修改：`npx mocha test\metadata-helpers.test.js`。
-- 导航热修复修改：`npx mocha test\nav-hotfix-static.test.js`。
-- 前端源码修改：在 `D:\Dev\Projects\Practice\Sanyue-ImgHub` 运行 `npm run build`；若同步了 `frontend-dist`，再按影响范围运行本仓库静态测试或集成测试。
-- 新增、删除或移动 Functions 路由：`node deploy\worker\generate-routes.js`，然后检查 `deploy/worker/index.js` diff。
-- 跨运行时改动：按影响范围运行 `npm run ci-test` 或 `npm run ci-test:docker`。
+### FLOW-SHARE — 分享创建、管理与访问
 
-## 何时更新本文档
+- **目的**：以一个 token 表达单个或多个文件 / 目录目标，并在公开访问时解析可访问内容。
+- **触发 / 入口**：`functions/api/manage/share/` 的创建、列表、撤销和删除；`functions/api/share/[[path]].js` 与 `functions/share/[[path]].js` 的公开访问。
+- **参与模块**：`MOD-FUNCTIONS` → `MOD-DATA`。
+- **稳定主链路**：管理端创建分享及 item → D1 / SQLite 写入 `share_links`、`share_link_items`，或 KV 写入分享 JSON → 公开请求校验 token 状态和目标范围 → 文件目标直接解析，目录目标按前缀在请求时解析当前内容。
+- **关键交接**：数据适配层统一 D1 / SQLite、KV 和旧记录形态，公开入口先完成 token 校验再解析目标；历史兼容语义见 `MEM-003`。
+- **外部边界**：管理端鉴权、公开分享页面和文件访问控制。
+- **典型影响范围**：分享 schema、token 生命周期、动态目录、分享管理 UI 与 `FLOW-FILE-ACCESS`。
 
-- 新增、删除或迁移重要目录、运行模式或部署流程。
-- 改动数据库 schema、迁移策略、存储渠道、鉴权规则、分享链接规则或缓存策略。
-- 改动 Worker 路由生成、Docker/Node.js 适配、Pages Functions 中间件或关键命令。
-- 发现会影响后续维护的稳定坑点或约定。
+### FLOW-FILE-DELETION — 文件删除与强制本地清理
+
+- **目的**：协调远端存储删除、本地元数据 / 索引 / 缓存清理及失败后的确认语义。
+- **触发 / 入口**：`functions/api/manage/delete/[[path]].js` 的管理端删除请求。
+- **参与模块**：`MOD-FUNCTIONS` → `MOD-DATA`，并由 `MOD-FRONTEND-DELIVERY` 提供确认交互。
+- **稳定主链路**：读取文件元数据 → 调用对应存储删除 → 清理本站数据库、缓存与索引；可确认的外部删除失败会在本地清理前返回结构化结果，确认后再进入受限的异常清理路径。
+- **关键交接**：异常清理只跨过被确认的外部删除步骤，错误分类和受保护语义见 `MEM-005`。
+- **外部边界**：Telegram API、数据库、R2、缓存与管理前端。
+- **典型影响范围**：管理删除 API、文件元数据、索引、缓存和前端确认。
+
+### FLOW-FRONTEND-SYNC — 前端源码到部署产物
+
+- **目的**：把独立前端仓的源码变更可靠同步为本仓可部署静态产物。
+- **触发 / 入口**：前端界面、交互、`public/` 热修复脚本或样式发生变化。
+- **参与模块**：`MOD-FRONTEND-DELIVERY` → `MOD-NODE-RUNTIME` / `MOD-WORKER-RUNTIME` / Pages。
+- **稳定主链路**：修改独立前端源码 → 构建 `dist/` → 审查哈希文件和变更范围 → 同步 `frontend-dist/` → 保持相关 gzip 产物一致 → 由各运行时提供静态资源。
+- **关键交接**：本仓 `frontend-dist/` 是构建结果，不反向成为长期源码 Source of Truth。
+- **外部边界**：独立前端仓及其 Vue 构建工具链。
+- **典型影响范围**：前端源码、构建产物、`index.html`、哈希资源、未哈希热修复资源和静态测试。
+
+### FLOW-SCHEMA-EVOLUTION — 数据库结构演进
+
+- **目的**：同时服务新安装和既有 D1 / SQLite 数据库。
+- **触发 / 入口**：新增或修改表、列、索引或触发器。
+- **参与模块**：`MOD-DATA` → `MOD-FUNCTIONS` / `MOD-NODE-RUNTIME`。
+- **稳定主链路**：更新新库完整 schema → 增加旧库幂等迁移 → 必要时保留运行时防御性兼容 → 由 D1 与 SQLite 适配消费。
+- **关键交接**：`database/init.sql` 描述当前新库结构；`database/migrations/` 描述旧库演进；`functions/utils/d1Database.js` 可为历史分享表补列或确保 item 表存在。
+- **外部边界**：Cloudflare D1 与 SQLite；KV 模式不执行 SQL 迁移。
+- **典型影响范围**：初始化 SQL、迁移文件、数据适配器、相关业务测试和迁移说明。
+
+## 5. 核心数据、状态与 Source of Truth
+
+| 数据 / 状态 | Owner | Source of Truth | 持久化位置 | 主要消费者 | 说明 |
+|---|---|---|---|---|---|
+| 文件元数据与索引 | `MOD-DATA` | 当前启用的数据库后端，经 `databaseAdapter` / `indexManager` 访问 | Cloudflare KV、D1 或 Node.js SQLite | `MOD-FUNCTIONS` | 文件内容与元数据分离 |
+| 系统配置 | `MOD-FUNCTIONS` | 数据库中的配置记录，经 `functions/utils/sysConfig.js` 解释 | KV、D1 或 SQLite | 上传、访问、随机、前端公开配置 | 环境变量只作为兼容 / 运行输入，不替代已持久化配置语义 |
+| 文件内容 | `MOD-DATA` | 当前记录指定的存储渠道 | R2、本地 R2 模拟或外部存储服务 | 上传、读取、删除 | 存储渠道与元数据通过文件记录关联 |
+| 分享授权与目标集合 | `MOD-FUNCTIONS` | 分享记录及其 item | D1 / SQLite 的 `share_links`、`share_link_items`；KV 分享 JSON | 管理分享与公开分享 | 旧单目标字段仍是兼容读取来源 |
+| Worker 路由表 | `MOD-WORKER-RUNTIME` | `functions/` 路由树与 `generate-routes.js` | `deploy/worker/index.js`（生成物） | Worker 部署 | 生成文件不是独立事实源 |
+| 前端源码与部署产物 | `MOD-FRONTEND-DELIVERY` | 独立前端仓源码；本仓只保存经审查的部署快照 | 前端仓 `src/` / `public/`，本仓 `frontend-dist/` | Pages、Workers、Node.js | 源码和产物职责不可互换 |
+
+## 6. 全局稳定架构边界
+
+- 三种运行形态共享 `MOD-FUNCTIONS`；`MOD-NODE-RUNTIME` 与 `MOD-WORKER-RUNTIME` 不维护另一套业务规则。
+- Worker 路由表与 `frontend-dist/` 都是派生产物，各自的 Source of Truth 分别是 Functions + 生成器、独立前端源码仓。
+- `MOD-FUNCTIONS` 拥有系统配置和业务语义，`MOD-DATA` 拥有持久化 / 存储写入语义；二者通过适配器边界协作。
+- SQL 新库结构、旧库迁移和运行时防御兼容是三个不同层次。
+- `data/`、`.wrangler/`、Node.js 进程内 Cache 与本地 R2 / SQLite 是运行状态，不是版本化架构配置。
+
+## 7. 维护与拆分
+
+- 只在稳定职责、关系、Owner、Source of Truth、主要位置或关键流程变化时更新本文；任务历史、命令规则、临时错误和决策原因不进入 Context。
+- 普通文件 / 目录移动不创建历史记录，也不因职责未变更换 `MOD-*` / `FLOW-*` ID；保存路径变化时直接更新为当前路径。
+- 创建、替换或删除 `MOD-*` / `FLOW-*` 时，同步检查根 `AGENTS.md` 路由和 `docs/PROJECT_MEMORY.md` 的作用域 / 索引，避免孤儿引用。
+- 默认保持一个根 Context；只有定向读取效率确实下降且模块拥有大量独立稳定知识时，才按 `PROJECT_AGENTS_WORKFLOW V2` 拆分。

@@ -1,96 +1,218 @@
-# CloudFlare-ImgBed 项目记忆
+# 项目跨任务记忆
 
-本文件是 `CloudFlare-ImgBed` 后续任务的快速入口记忆。它补充 `docs/CONTEXT.md`，重点记录近期决策、维护偏好和容易影响后续任务的事项。开始处理本项目任务时，先读 `docs/CONTEXT.md`，再读本文件。
+## 1. 索引
 
-## 当前任务入口
+| 作用域 | Memory |
+|---|---|
+| `FLOW-FILE-ACCESS` | `MEM-001 DECISION` |
+| `FLOW-SHARE` | `MEM-002 DECISION`、`MEM-003 DECISION`、`MEM-004 DECISION` |
+| `FLOW-FILE-DELETION` | `MEM-005 DECISION` |
+| `MOD-FUNCTIONS` | `MEM-006 DECISION` |
+| `FLOW-SCHEMA-EVOLUTION` | `MEM-007 ISSUE` |
 
-- 项目是文件托管服务，不是纯静态前端项目。
-- 常见任务主要分为：Functions API 维护、存储渠道维护、鉴权与分享访问控制、部署适配、数据库迁移、前端源码维护和静态前端产物同步。
-- 当前仓库没有完整前端源码；完整前端源码在相邻仓库 `D:\Dev\Projects\Practice\Sanyue-ImgHub`。
-- 对界面和交互做长期修改时，优先改 `Sanyue-ImgHub/src` 或 `Sanyue-ImgHub/public`，再构建并同步 `dist` 到本仓库 `frontend-dist`。
-- 如果任务涉及长期规则、部署方式、数据库结构、核心访问控制、重要目录或验证方式，结束前检查是否需要更新 `docs/CONTEXT.md` 和本文件。
+索引只用于定向读取；正文是唯一事实源。
 
-## 近期重要记忆
+## FLOW-FILE-ACCESS
 
-- 2026-07-06：新增项目级 `AGENTS.md`、`docs/CONTEXT.md` 和 `docs/PROJECT_MEMORY.md`，用于让后续任务保留项目上下文。
-- 2026-07-06：最新提交脉络集中在分享功能和管理导航，包括分享目标选择、分享管理、分享按钮 fallback、过期分享链接、新建文件夹、回收站批量操作和删除确认弹窗。
-- 2026-07-07：分享链接升级为 `share_links` + `share_link_items` 两层模型；新建分享可以用 `targets` 数组让一个 token 包含多个文件和目录。
-- 2026-07-07：本机已下载前端源码仓库 `D:\Dev\Projects\Practice\Sanyue-ImgHub`；导航热修复已迁移到该仓库 `public/js/nav-hotfix.js` 和 `public/css/nav-hotfix.css`，由前端 build 带入 `dist`。
-- 当前 `package.json` 版本为 `2.7.4`；仓库中已存在 `database/migrations/v2.7.5_add_share_links.sql`，不要仅凭 package 版本判断迁移是否不存在。
-- 2026-07-07：新增 `functions/utils/logger.js` 作为脱敏日志工具；上传和第三方存储路径应优先使用 logger，默认 warn/error，避免直接输出 token、签名 URL、完整第三方 API 响应或 SHA256/OID。
-- 2026-07-07：新增 `database/migrations/README.md` 和 `docs/FRONTEND_DIST_SYNC.md`，分别记录数据库迁移规则和前端产物同步 checklist。
-- 2026-07-07：新增 `npm run test:routes`，会重新生成 Worker 路由并运行 `test/worker-routes-static.test.js`。
-- 2026-07-13：随机 API 基础地址明确为 `/random`；允许目录留空代表全部目录，非空且请求未传 `dir` 时会自动在允许目录并集中随机。随机图片改为流式透传，候选缓存改用响应 TTL，并在文件变化时失效祖先目录缓存。
-- 2026-07-13：Docker/Node.js 增加有界内存 Cache API 和 gzip 预压缩静态资源支持；哈希资源长期缓存，入口页与未哈希热修复资源使用 `no-cache`。
-- 2026-07-13：主页 `uploadBkImg` 支持直接粘贴单张 URL，配置保存后刷新前端公开配置；Bing 背景不再等待所有图片预加载。随机 API 地址帮助脚本同时维护在前端源码 `public/js/random-api-help.js` 和本仓库部署产物中。
-- `frontend-dist` 从 README 的 v2.7.1 公告开始是 Cloudflare Pages 构建输出目录。
+### MEM-001 — 受保护访问面不得相互越权
 
-## 维护注意事项
+- **类型**：DECISION
+- **状态**：有效
+- **作用域**：FLOW-FILE-ACCESS
+- **强度**：保护
+- **来源**：旧 `docs/PROJECT_MEMORY.md`，由 Git 提交 `1cafb1e`（2026-07-06）引入；当前实现与 `test/share-links.test.js`
+- **最后确认**：2026-08-12
+- **失效 / 重新考虑条件**：产品明确重定义管理、公开或分享访问权限模型，并同步更新缓存与安全测试。
 
-- 每轮修改前先看 `git status --short --branch`，本项目可能存在运行时或热修复相关未提交改动。
-- `deploy/worker/index.js` 是生成文件；新增或移动 `functions/` 路由后运行 `node deploy\worker\generate-routes.js`。
-- `deploy/worker/generate-routes.js` 会跳过 `functions/utils`，并只把导出 `onRequest` 的 JS 文件纳入路由。
-- `npm run test:routes` 会执行 `node deploy/worker/generate-routes.js`，如果路由源文件有变化，运行后要检查 `deploy/worker/index.js` diff 是否符合预期。
-- `deploy/server/index.js` 在 Docker/Node.js 模式下动态导入 Functions 文件，并在 Windows 上使用 `pathToFileURL`；改动动态 import 时注意 Windows 路径。
-- `data` 是本地数据库和 R2 模拟数据目录，`.wrangler` 是 Wrangler 状态目录，二者都不应作为项目事实提交。
-- `npm start` 和 `npm run start:docker` 都默认占用 `8080` 端口；启动服务后要在最终回复说明地址和服务状态。
-- Docker/Node.js 模式依赖可选依赖 `hono`、`@hono/node-server`、`better-sqlite3`；如果只安装了 Worker 部署所需依赖，Docker 模式可能无法启动。
-- 本地前后端联调：本仓库运行 `npm start` 提供后端和部署产物服务，默认 `8080`；`Sanyue-ImgHub` 运行 `npm run serve` 提供前端开发服务，默认 `3000`。
-- `Sanyue-ImgHub/.env.development` 指向 `VUE_APP_BACKEND_URL=http://127.0.0.1:8080`；如果前端 API 代理 404，优先检查 `vue.config.js` 的 `devServer.proxy` 和 `pathRewrite`。
+**决定**
 
-## 业务规则记忆
+管理访问、普通公开访问和分享访问是不同安全面，分享 token 只授予目标范围内的分享访问，不升级为管理权限或无条件文件权限。
 
-- 上传入口会统一读取安全配置、上传渠道配置和页面配置，并在写入元数据后更新索引和清理缓存。
-- 上传路径必须经过 `sanitizeUploadFolder`，不要重新引入 `..`、反斜杠或未规范化路径。
-- 支持的上传渠道包括 Telegram、Cloudflare R2、S3、Discord、Hugging Face、WebDAV 和 External。
-- Telegram 渠道会写入 `SourceGroup`，相关逻辑在 `functions/utils/sourceGroup.js`，测试在 `test/metadata-helpers.test.js`。
-- 调试日志不要直接使用 `console.log` 打印完整配置、响应体或上传 URL；使用 `functions/utils/logger.js`，并优先记录状态码、流程阶段、文件大小、是否存在配置等摘要信息。
-- 分享链接要同时检查 token 状态、目标范围和文件元数据状态；Block、Trash、adult 文件不能因为分享 token 而被公开绕过。
-- 分享管理新记录会保存完整 token，并在管理员列表接口返回 `/share/<token>` URL，便于跨浏览器复制历史链接；旧记录如果没有保存 token，仍只能依赖本浏览器缓存或重新创建。
-- 2026-07-26：分享管理支持多选批量撤销和永久删除记录；永久删除只允许处理已撤销或已过期记录，会删除 `share_links`/`share_link_items` 或 KV 分享 JSON，不会删除原文件。
-- 2026-08-10：Telegram 永久删除失败时，管理删除接口返回结构化的 `TELEGRAM_DELETE_FAILED` 和 `forceable: true`；只有前端二次确认后才能以 `force=true` 仅清理本站数据库、缓存和索引，Telegram 原消息仍会保留。数据库、R2、配置或索引故障不得被 force 静默吞掉。
-- 2026-07-26：公开分享页为 `image/*` 文件提供点击后加载的弹层预览，关闭时清除图片地址，原有打开和下载操作保持不变。
-- 多目标分享中的目录 item 使用动态目录前缀，不做创建时快照；目录新增文件后，只要文件元数据可访问，就会出现在分享内。
-- 管理端 API 需要 admin 范围鉴权，且响应默认应为 no-store。
-- 文件响应缓存策略需要区分公开访问、管理预览和分享访问；分享访问不应使用公开长缓存。
+**原因**
 
-## 数据库记忆
+未留存。旧治理文件将其记录为持续保护的安全边界，当前实现和测试仍据此工作。
 
-- `database/init.sql` 是新库初始化脚本；新增表、列、索引或触发器时要同步考虑迁移脚本。
-- `share_links` 既存在于初始化脚本中，也有 `v2.7.5_add_share_links.sql` 和 `v2.7.6_add_share_token.sql` 迁移，用于旧库升级。
-- `share_link_items` 存储多目标分享 item，迁移文件是 `v2.7.7_add_share_link_items.sql`；旧单目标记录即使没有 item，也会通过 `share_links.target_type` / `target_path` 兼容访问。
-- D1 适配层会在写入分享链接前检查旧 `share_links` 表是否缺少 `token` 列，缺失时自动执行补列，避免创建分享时报 `no column named token`。
-- D1 适配层会自动确保 `share_link_items` 表存在；KV 适配层没有独立 item 表，而是把 `items` 内嵌在 `manage@share@<id>` 分享 JSON 中。
-- `files.tags` 既在初始化脚本中存在，也有 `v2.2.1_add_tags_column.sql` 迁移。
-- `functions/utils/databaseAdapter.js` 同时支持 KV 和 D1。修改适配层时要跑相关测试，并确认 KV、D1、SQLite 三种路径是否行为一致。
-- 如果同时配置 KV 和 D1，必须阅读当前适配逻辑确认实际选择顺序，不要仅根据配置检查函数的返回说明做推断。
+**受保护行为 / 不变量**
 
-## 前端热修复记忆
+- 分享访问必须校验 token 状态、有效期、撤销状态和目标路径范围。
+- 分享 token 不得绕过 `Block`、`Trash`、`adult` 等文件元数据限制。
+- 管理 API 保持管理范围鉴权，管理响应不得进入公开缓存。
+- 分享访问不得使用可能被公共用户复用的公开长缓存策略。
 
-- `frontend-dist/js/nav-hotfix.js` 和 `frontend-dist/css/nav-hotfix.css` 有对应 gzip 文件。
-- 导航热修复源码现在维护在 `D:\Dev\Projects\Practice\Sanyue-ImgHub\public\js\nav-hotfix.js` 和 `D:\Dev\Projects\Practice\Sanyue-ImgHub\public\css\nav-hotfix.css`；`Sanyue-ImgHub/public/index.html` 会引用它们。
-- 修改导航热修复的优先路径是改 `Sanyue-ImgHub/public`，运行 `npm run build` 后把 `dist` 同步到本仓库 `frontend-dist`；如果直接修改 `frontend-dist`，必须同步更新 `.gz` 文件。
-- 修改导航热修复后运行 `npx mocha test\nav-hotfix-static.test.js`。
-- 现有导航热修复测试通过源码字符串静态断言管理导航、回收站、分享管理、新建文件夹、Telegram 导入和上传页布局，不会启动浏览器。
-- 不要对 `frontend-dist` 做全目录格式化或重新构建，除非用户明确要求并接受大范围产物变更。
-- 若 `Sanyue-ImgHub/dist` 生成的 hash 文件与本仓库 `frontend-dist` 大量不同，先确认是否真的需要全量同步，避免无关产物抖动。
+**替代 / 拒绝方向**
 
-## 验证记忆
+不得把“持有分享 token”等同于“忽略文件状态”或“拥有管理权限”，也不得让管理 / 分享响应复用公开缓存。
 
-- 文档-only 修改：`git diff --check` 足够。
-- 常规测试：`npm test`。
-- Worker 路由静态检查：`npm run test:routes`。
-- 分享链接：`npx mocha test\share-links.test.js`。
-- 元数据辅助：`npx mocha test\metadata-helpers.test.js`。
-- 导航热修复：`npx mocha test\nav-hotfix-static.test.js`。
-- 前端源码：在 `D:\Dev\Projects\Practice\Sanyue-ImgHub` 运行 `npm run build`；构建成功但可能有既有 CSS order 或体积 warning。
-- 前端构建产物同步后：按改动内容在本仓库运行 `git diff --check`、导航热修复静态测试或相关集成测试。
-- 本地 Pages Functions 集成：`npm run ci-test`，会启动 `npm start` 并等待 `http://localhost:8080`。
-- Docker/Node.js 集成：`npm run ci-test:docker`，会启动 `npm run start:docker` 并等待 `http://localhost:8080`。
+## FLOW-SHARE
 
-## 维护本文件的规则
+### MEM-002 — 目录分享保持动态目录语义
 
-- 只记录未来任务会反复用到的信息。
-- 不记录一次性命令输出、临时调试步骤、未验证猜测或敏感信息。
-- 稳定项目事实优先写入 `docs/CONTEXT.md`；近期维护提醒、常见坑点和任务入口偏好写入本文件。
-- 如果本文件与 `docs/CONTEXT.md` 冲突，以 `docs/CONTEXT.md` 的项目事实为准，并修正本文件。
+- **类型**：DECISION
+- **状态**：有效
+- **作用域**：FLOW-SHARE
+- **强度**：保护
+- **来源**：Git 提交 `b318f93`（2026-07-07）及其写入的旧 `docs/PROJECT_MEMORY.md`
+- **最后确认**：2026-08-12
+- **失效 / 重新考虑条件**：产品明确把目录分享改为版本化快照，并定义已有动态分享的迁移和兼容策略。
+
+**决定**
+
+目录类型的分享 item 保存目录目标，在访问时按目录前缀解析当前可访问内容；创建分享时不展开成文件快照。多目标分享中的目录 item 使用同一语义。
+
+**原因**
+
+未留存。
+
+**受保护行为 / 不变量**
+
+- 目录中新加入且符合访问规则的文件会出现在既有目录分享中。
+- 目录 item 不因采用多目标分享模型而变成创建时快照。
+
+**替代 / 拒绝方向**
+
+不得在未处理兼容性的情况下把现有目录分享静默改为静态文件列表。
+
+### MEM-003 — 分享数据模型保留历史兼容与管理端链接恢复
+
+- **类型**：DECISION
+- **状态**：有效
+- **作用域**：FLOW-SHARE
+- **强度**：保护
+- **来源**：Git 提交 `39702db`、`16edd9c`、`b318f93`（2026-07-07）及对应旧治理记录
+- **最后确认**：2026-08-12
+- **失效 / 重新考虑条件**：完成显式数据迁移并正式停止读取旧单目标字段，或产品明确停止管理端历史链接恢复。
+
+**决定**
+
+新分享使用可包含多个 item 的模型；旧单目标记录继续通过 `share_links.target_type` / `target_path` 兼容访问。新记录保存完整 token 供管理端跨浏览器恢复历史分享 URL，同时保留 token hash 用于公开访问校验。
+
+**原因**
+
+升级后的数据库需要继续访问旧分享；完整 token 用于管理员复制历史链接，而不是替代 hash 校验。
+
+**受保护行为 / 不变量**
+
+- 没有 item 的旧单目标记录仍能按旧目标字段解析。
+- 新记录的管理接口可恢复 `/share/<token>` 链接，公开校验仍使用受控验证路径。
+- 旧记录若从未保存完整 token，不伪造或反推 token；只能使用已有浏览器缓存或重新创建分享。
+
+### MEM-004 — 永久删除分享记录不删除原文件
+
+- **类型**：DECISION
+- **状态**：有效
+- **作用域**：FLOW-SHARE
+- **强度**：保护
+- **来源**：Git 提交 `e75bfa1`（2026-07-26）及其写入的旧 `docs/PROJECT_MEMORY.md`
+- **最后确认**：2026-08-12
+- **失效 / 重新考虑条件**：产品明确合并“撤销分享”和“删除原文件”的生命周期，并提供迁移、授权与确认设计。
+
+**决定**
+
+分享记录只有在已撤销或已过期时才能永久删除；永久删除只移除 `share_links` / `share_link_items` 或对应 KV 分享 JSON，不删除其引用的原文件。
+
+**原因**
+
+未留存。
+
+**受保护行为 / 不变量**
+
+- 有效分享必须先撤销或等待过期，不能直接永久删除记录。
+- 分享授权记录与原文件生命周期保持独立。
+
+**替代 / 拒绝方向**
+
+不得把“永久删除分享记录”实现成原文件删除。
+
+## FLOW-FILE-DELETION
+
+### MEM-005 — Telegram 删除失败只能经确认后强制清理本站状态
+
+- **类型**：DECISION
+- **状态**：有效
+- **作用域**：FLOW-FILE-DELETION
+- **强度**：保护
+- **来源**：Git 提交 `cbf0822`（2026-08-10）及其写入的旧 `docs/PROJECT_MEMORY.md`
+- **最后确认**：2026-08-12
+- **失效 / 重新考虑条件**：Telegram 删除 API、文件所有权模型或管理端危险操作确认机制被产品明确替换。
+
+**决定**
+
+Telegram 永久删除失败时，后端先返回 `TELEGRAM_DELETE_FAILED` 和 `forceable: true`；只有用户二次确认后，`force=true` 才能跳过 Telegram 原消息删除并清理本站数据库、缓存和索引。
+
+**原因**
+
+第三方删除失败不应永久阻塞本站记录清理，但强制路径只能覆盖这一已识别的第三方失败，不能掩盖本站数据一致性故障。
+
+**受保护行为 / 不变量**
+
+- force 后 Telegram 原消息可能保留，交互必须让用户明确知情。
+- 数据库、R2、配置或索引故障不得标记为可强制，也不得被 `force=true` 静默吞掉。
+- 未经二次确认不执行仅清理本站状态的危险路径。
+
+**替代 / 拒绝方向**
+
+不得把 `force=true` 实现为忽略所有删除错误的通用开关。
+
+## MOD-FUNCTIONS
+
+### MEM-006 — 随机 API 允许目录的默认语义
+
+- **类型**：DECISION
+- **状态**：有效
+- **作用域**：MOD-FUNCTIONS
+- **强度**：保护
+- **来源**：Git 提交 `670b2d7`（2026-07-26）及 `test/random-api.test.js`
+- **最后确认**：2026-08-12
+- **失效 / 重新考虑条件**：产品明确修改随机 API 的目录授权模型，并同步更新公开配置、帮助文案和测试。
+
+**决定**
+
+随机 API 基础入口为 `/random`。允许目录配置为空时覆盖全部目录；配置一个或多个允许目录且请求未传 `dir` 时，在这些目录的并集中随机；显式传入 `dir` 时仍必须执行允许目录边界校验。
+
+**原因**
+
+未留存。
+
+**受保护行为 / 不变量**
+
+- 空允许目录不是“无目录可用”，而是“不限制目录”。
+- 非空允许目录不会因为省略 `dir` 而退化为全库随机。
+- 显式 `dir` 不能访问允许目录之外的路径。
+
+## FLOW-SCHEMA-EVOLUTION
+
+### MEM-007 — 应用版本不能判断迁移是否存在
+
+- **类型**：ISSUE
+- **状态**：有效
+- **作用域**：FLOW-SCHEMA-EVOLUTION
+- **强度**：默认
+- **来源**：`database/migrations/README.md`；当前 `package.json` 与 `database/migrations/` 静态核验
+- **最后确认**：2026-08-12
+- **失效 / 重新考虑条件**：项目采用并强制执行应用版本与迁移账本一一对应的新机制。
+
+**触发条件**
+
+仅根据 `package.json` 的当前版本判断某个 schema 迁移是否尚未创建或不应存在。
+
+**已验证根因**
+
+迁移文件名记录 schema 变化引入时的产品版本，而 `package.json` 不是迁移账本；仓库可在应用版本较低时已经包含供现有数据库升级的更高编号迁移。
+
+**正确处理**
+
+同时检查 `database/init.sql`、`database/migrations/` 及 `database/migrations/README.md`，再判断新库结构和旧库升级路径。
+
+**不要做**
+
+不要因 package 版本较低而删除、跳过或重复创建现有迁移。
+
+**最小确认**
+
+读取 `package.json` 版本，并列出迁移目录与初始化 SQL 中相关表 / 列；无需运行完整构建。
+
+## 维护
+
+- 仅维护当前 `有效` / `待复核` Memory 和 `进行中` RESUME 的索引；正文状态与索引冲突时以正文为准。
+- 同一决定、偏好或问题只保留一个主要正文来源。结构事实写 `docs/CONTEXT.md`，执行门禁写根 `AGENTS.md`。
+- RESUME 完成后删除；条目作用域或状态变化时同步更新索引。
