@@ -7,6 +7,7 @@
 | `FLOW-FILE-ACCESS` | `MEM-001 DECISION` |
 | `FLOW-SHARE` | `MEM-002 DECISION`、`MEM-003 DECISION`、`MEM-004 DECISION` |
 | `FLOW-FILE-DELETION` | `MEM-005 DECISION` |
+| `FLOW-UPLOAD` | `MEM-008 PREFERENCE` |
 | `MOD-FUNCTIONS` | `MEM-006 DECISION` |
 | `FLOW-SCHEMA-EVOLUTION` | `MEM-007 ISSUE` |
 
@@ -152,6 +153,22 @@ Telegram 永久删除失败时，后端先返回 `TELEGRAM_DELETE_FAILED` 和 `f
 **替代 / 拒绝方向**
 
 不得把 `force=true` 实现为忽略所有删除错误的通用开关。
+
+## FLOW-UPLOAD
+
+### MEM-008 — 当前个人部署优先 Telegram 与 KV
+
+- **类型**：PREFERENCE
+- **状态**：有效
+- **作用域**：FLOW-UPLOAD
+- **强度**：偏好
+- **来源**：用户于 2026-08-13 明确说明当前只使用 Telegram 存储，且图床仅供个人使用
+- **最后确认**：2026-08-13
+- **失效 / 重新考虑条件**：用户开始使用其他存储渠道、开放多人使用，或明确要求多渠道 / 多实例并发保证。
+
+**偏好**
+
+功能默认围绕 `TelegramNew`、KV 和单管理员个人使用场景做最低必要实现；除非用户明确要求，不因潜在多渠道或多人场景扩大设计与验证范围。
 
 ## MOD-FUNCTIONS
 

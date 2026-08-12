@@ -66,7 +66,8 @@ function extractRequiredPermission(pathname) {
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, DELETE, PUT, PATCH, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, If-Match, X-Content-BOM, X-Content-EOL',
+  'Access-Control-Expose-Headers': 'ETag, X-Content-BOM, X-Content-EOL, X-Content-Size',
   'Access-Control-Max-Age': '86400',
 };
 

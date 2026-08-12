@@ -575,6 +575,43 @@ describe('share links', () => {
     assert.equal(blocked.headers.get('Cache-Control'), 'private, no-store, max-age=0');
   });
 
+  it('does not cache editable text file responses', async () => {
+    const env = createEnv();
+    const context = {
+      env,
+      url: new URL('https://img.example/file/docs/notes.txt'),
+      securityConfig: { access: { whiteListMode: false } },
+      fileAccess: {
+        isAdminPreview: false,
+        adminAuthResult: { authorized: false },
+        shareToken: '',
+      },
+    };
+    const metadata = {
+      Channel: 'TelegramNew',
+      FileName: 'notes.txt',
+      FileType: 'text/plain',
+      ListType: 'None',
+    };
+
+    const publicResponse = await returnWithCheck(context, { metadata }, 'docs/notes.txt');
+    assert.equal(publicResponse.status, 200);
+    assert.equal(context.fileAccess.cacheControl, 'no-store, max-age=0');
+
+    context.fileAccess.isAdminPreview = true;
+    context.fileAccess.adminAuthResult.authorized = true;
+    const adminResponse = await returnWithCheck(context, { metadata }, 'docs/notes.txt');
+    assert.equal(adminResponse.status, 200);
+    assert.equal(context.fileAccess.cacheControl, 'private, no-store, max-age=0');
+
+    context.fileAccess.isAdminPreview = false;
+    context.fileAccess.adminAuthResult.authorized = false;
+    await returnWithCheck(context, {
+      metadata: { ...metadata, FileName: 'renamed.txt' },
+    }, '.env');
+    assert.equal(context.fileAccess.cacheControl, 'public, max-age=2592000');
+  });
+
   it('stores share links in the D1 share_links table', async function () {
     this.timeout(5000);
 

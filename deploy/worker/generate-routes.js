@@ -328,6 +328,23 @@ function isCacheLookupRequest(request) {
     return request.method === 'GET' || request.method === 'HEAD';
 }
 
+// 可编辑文本必须始终进入业务处理链。这样即使某个边缘节点仍保存着
+// 功能上线前写入的长期缓存，也不会在保存后继续返回旧正文。
+function shouldBypassMutableTextCache(request) {
+    const pathname = new URL(request.url).pathname;
+    if (!pathname.startsWith('/file/')) return false;
+
+    let filePath = pathname.slice('/file/'.length);
+    try {
+        filePath = decodeURIComponent(filePath);
+    } catch {
+        // 无法解码的路径交给业务路由处理；这里不把它误判成可缓存文件。
+        return true;
+    }
+    const baseName = filePath.split('/').pop() || '';
+    return !baseName.includes('.') || /\\.(?:txt|md|markdown|json)$/i.test(baseName);
+}
+
 // 只写入完整 GET 响应，Range 请求仅尝试命中已有完整缓存
 function isCacheStoreRequest(request) {
     return request.method === 'GET' && !request.headers.has('Range');
@@ -357,7 +374,7 @@ function responseFromHeadCache(cachedResponse) {
 }
 
 async function maybeServeFromCache(request, ctx, producer) {
-    if (!isCacheLookupRequest(request)) {
+    if (!isCacheLookupRequest(request) || shouldBypassMutableTextCache(request)) {
         return await producer();
     }
 

@@ -1,6 +1,7 @@
 /* ======== 文件读取工具函数 ======== */
 
 import { validateShareTokenForFile } from '../utils/share/shareLinks.js';
+import { isEditableTextRecord } from '../utils/textContentPolicy.js';
 
 // 判断请求域名是否在允许的域名列表中
 export function isDomainAllowed(context) {
@@ -54,6 +55,7 @@ export const FILE_CACHE_CONTROL = {
     PUBLIC: 'public, max-age=2592000',
     PRIVATE: 'private, max-age=86400',
     NO_STORE: 'private, no-store, max-age=0',
+    PUBLIC_NO_STORE: 'no-store, max-age=0',
 };
 
 // 公共响应头设置函数
@@ -140,13 +142,14 @@ export async function returnWithCheck(context, imgRecord, fileId = '') {
     }
 
     const record = imgRecord;
+    const editableText = isEditableTextRecord(fileId, record?.metadata);
     if (record.metadata === null) {
         context.fileAccess.cacheControl = isAdminPreview ? FILE_CACHE_CONTROL.PRIVATE : FILE_CACHE_CONTROL.PUBLIC;
         return response;
     }
 
     if (isAdminPreview) {
-        context.fileAccess.cacheControl = FILE_CACHE_CONTROL.PRIVATE;
+        context.fileAccess.cacheControl = editableText ? FILE_CACHE_CONTROL.NO_STORE : FILE_CACHE_CONTROL.PRIVATE;
         return response;
     }
 
@@ -155,11 +158,11 @@ export async function returnWithCheck(context, imgRecord, fileId = '') {
         if (!shareAccess.valid) {
             return shareAccessDeniedResponse(shareAccess.reason);
         }
-        context.fileAccess.cacheControl = FILE_CACHE_CONTROL.PRIVATE;
+        context.fileAccess.cacheControl = editableText ? FILE_CACHE_CONTROL.NO_STORE : FILE_CACHE_CONTROL.PRIVATE;
         return response;
     }
 
-    context.fileAccess.cacheControl = FILE_CACHE_CONTROL.PUBLIC;
+    context.fileAccess.cacheControl = editableText ? FILE_CACHE_CONTROL.PUBLIC_NO_STORE : FILE_CACHE_CONTROL.PUBLIC;
 
     if (record.metadata.ListType == "White") {
         return response;

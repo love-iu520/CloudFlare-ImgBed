@@ -20,10 +20,18 @@ describe('worker route generation', () => {
   it('keeps admin routes behind both API and manage middleware', () => {
     assert.match(workerIndex, /path: '\/api\/manage\/share'.*middlewares: \[mw_api, mw_api_manage\]/);
     assert.match(workerIndex, /path: '\/api\/manage\/share\/'.*middlewares: \[mw_api, mw_api_manage\].*catchAll: true/);
+    assert.match(workerIndex, /path: '\/api\/manage\/content\/'.*middlewares: \[mw_api, mw_api_manage\].*catchAll: true/);
   });
 
   it('keeps public API routes behind only the API middleware', () => {
     assert.match(workerIndex, /path: '\/api\/share\/'.*middlewares: \[mw_api\].*catchAll: true/);
     assert.match(workerIndex, /path: '\/api\/public\/list'.*middlewares: \[mw_api\]/);
+  });
+
+  it('bypasses historical Worker cache entries for editable text files', () => {
+    assert.match(workerIndex, /function shouldBypassMutableTextCache\(request\)/);
+    assert.match(workerIndex, /!baseName\.includes\('\.'\)/);
+    assert.ok(workerIndex.includes('/\\.(?:txt|md|markdown|json)$/i'));
+    assert.match(workerIndex, /shouldBypassMutableTextCache\(request\)/);
   });
 });
