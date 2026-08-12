@@ -95,10 +95,11 @@ export function buildContentEtag(revision) {
 
 export function ifMatchIncludes(ifMatch, etag) {
   if (!ifMatch || !etag) return false;
+  const normalizeEtag = value => String(value).trim().replace(/^W\/(?=")/, '');
+  const expectedEtag = normalizeEtag(etag);
   return String(ifMatch)
     .split(',')
-    .map(value => value.trim())
-    .some(value => value === etag);
+    .some(value => normalizeEtag(value) === expectedEtag);
 }
 
 export async function readRequestBytes(request, maxBytes = TEXT_CONTENT_MAX_BYTES) {
