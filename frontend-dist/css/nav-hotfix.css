@@ -140,7 +140,7 @@
   z-index: 2203;
 }
 
-.cfib-header-hotfix > .search-area {
+.cfib-header-hotfix > .header-search {
   grid-column: 2;
   grid-row: 1;
   justify-self: end;

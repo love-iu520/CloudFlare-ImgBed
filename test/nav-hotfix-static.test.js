@@ -88,6 +88,7 @@ describe('navigation hotfix deployment', () => {
   it('keeps the unified navigation layout without hiding native upload controls', () => {
     const unifiedTabsRule = css.match(/\.cfib-tabs-hotfix\.cfib-tabs-unified\s*\{[^}]*\}/);
     const unifiedNavRule = css.match(/\.cfib-tabs-hotfix\.cfib-tabs-unified \.cfib-admin-nav\s*\{[^}]*\}/);
+    const headerSearchRule = css.match(/\.cfib-header-hotfix > \.header-search\s*\{[^}]*\}/);
     const headerActionsRule = css.match(
       /\.cfib-header-hotfix > \.actions,\s*\.cfib-header-hotfix > \.header-action,\s*\.cfib-header-hotfix > \.header-actions\s*\{[^}]*\}/,
     );
@@ -100,6 +101,9 @@ describe('navigation hotfix deployment', () => {
     assert.ok(unifiedNavRule, 'unified administration navigation rule should exist');
     assert.match(unifiedNavRule[0], /grid-column:\s*2/);
     assert.match(css, /\.cfib-header-hotfix/);
+    assert.ok(headerSearchRule, 'header search should retain its grid placement rule');
+    assert.match(headerSearchRule[0], /grid-column:\s*2/);
+    assert.match(headerSearchRule[0], /grid-row:\s*1/);
     assert.ok(headerActionsRule, 'header actions should retain their layout rule');
     assert.match(headerActionsRule[0], /grid-column:\s*3/);
     assert.match(headerActionsRule[0], /white-space:\s*nowrap/);
