@@ -54,7 +54,8 @@
 
 - `functions/` 是 Pages、Workers 和 Docker / Node.js 共用的业务与路由 Source of Truth。共享行为优先在该层修改；只有运行时特有行为才进入对应适配模块。
 - `deploy/worker/index.js` 是 `deploy/worker/generate-routes.js` 的生成物，不手写修改。新增、删除或移动 Functions 路由，或改变路由导出方式后，重新生成并检查产物差异。
-- `frontend-dist/` 是部署产物，不是长期前端源码 Source of Truth。长期界面或交互修改应在独立前端源码仓完成、构建并审查 `dist` 后再同步；直接产物热修复仅限任务确实要求的场景，并同步对应 `.gz` 文件。详细流程以 `docs/FRONTEND_DIST_SYNC.md` 为准。
+- 前端界面、文案或局部交互任务默认只修改独立前端仓的源码。用户未明确要求“生产构建”“同步部署产物”“发布”或等价交付动作时，不运行 `npm run build`，不修改 `dist` / `frontend-dist`；用户说明自行手动测试时，也不自动启动前后端服务。
+- `frontend-dist/` 是部署产物，不是长期前端源码 Source of Truth。只有用户明确要求或确认进入构建交付阶段时，才在独立前端源码仓完成一次生产构建、审查 `dist` 并同步；同一源码状态不重复构建。直接产物热修复仅限任务确实要求的场景，并同步对应 `.gz` 文件。详细流程以 `docs/FRONTEND_DIST_SYNC.md` 为准。
 - 数据库结构变化必须同时考虑新库 `database/init.sql` 与旧库 `database/migrations/`，并保持 D1 与 SQLite 兼容；KV 路径不使用 SQL 迁移。迁移编号规则以 `database/migrations/README.md` 为准。
 - 上传及第三方存储路径使用 `functions/utils/logger.js` 输出脱敏摘要；渠道配置、token、Cookie、Authorization、签名 URL 和完整第三方响应体不得进入日志或治理文档。
 - `data/`、`.wrangler/`、SQLite 文件和本地 R2 内容是运行时状态，不作为源码或治理事实提交。
@@ -76,7 +77,8 @@
 | 导航热修复 | `npx mocha test/nav-hotfix-static.test.js` | 不启动浏览器 |
 | Docker / Node.js 适配 | `npx mocha test/docker-server-static.test.js` | 跨运行时影响再考虑 `npm run ci-test:docker` |
 | Pages / Docker 跨运行时行为 | `npm run ci-test` 或 `npm run ci-test:docker` | 只在实际影响需要时升级 |
-| 前端源码 | 在前端源码仓运行 `npm run build` | 同步产物后再按改动选择本仓静态或集成测试 |
+| 前端源码（仅源码开发） | 在前端源码仓运行直接命中目标的测试；无直接测试的纯界面修改使用 `git diff --check` | 不运行生产构建或全量测试；界面效果由开发模式手动验证 |
+| 前端部署产物同步 | 在前端源码仓运行一次 `npm run build` | 仅在用户明确要求或确认构建交付时执行；同步后按实际影响选择本仓检查 |
 
 ## 6. 项目知识路由
 
