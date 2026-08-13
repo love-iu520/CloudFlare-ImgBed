@@ -173,6 +173,8 @@ Provides detailed deployment documentation, feature docs, development plans, upd
 
 # 4. Tips
 
+- Local frontend and backend development: see [本地开发模式操作手册](docs/LOCAL_DEVELOPMENT.md).
+
 - Frontend is open source, see [MarSeventh/Sanyue-ImgHub](https://github.com/MarSeventh/Sanyue-ImgHub).
 
 - Desktop software is open source, see [MarSeventh/satellite](https://github.com/MarSeventh/satellite).
