@@ -1,28 +1,34 @@
 # Frontend dist sync checklist
 
-The full frontend source is maintained in the adjacent repository:
-
-`D:\Dev\Projects\Practice\Sanyue-ImgHub`
+The full frontend source is maintained in the independent repository
+`MarSeventh/Sanyue-ImgHub`.
 
 This repository stores only the built static assets in `frontend-dist`.
 
 ## Normal workflow
 
-1. Modify frontend source in `D:\Dev\Projects\Practice\Sanyue-ImgHub`.
-2. Run `npm run build` in that frontend repository.
+Use this checklist when the task meets the build, sync, or hotfix conditions in
+the [project modification boundaries](../AGENTS.md#4-项目特有修改边界).
+For source-only development, follow the [local development guide](LOCAL_DEVELOPMENT.md).
+
+1. Modify frontend source in `MarSeventh/Sanyue-ImgHub`.
+2. Run `npm run build` in that frontend repository, or reuse the existing build
+   output for the same source state.
 3. Review the generated `dist` changes before copying them here.
 4. Sync the built `dist` output into this repository's `frontend-dist`.
 5. Make sure related `.gz` files are synced with any changed JS or CSS files.
-6. Run the relevant static or integration checks in this repository.
+6. When verification is required under the [project verification rules](../AGENTS.md#5-项目验证入口),
+   run the relevant static or integration checks in this repository.
 
 ## Navigation hotfix files
 
 Navigation hotfix source lives in the frontend repository:
 
-- `D:\Dev\Projects\Practice\Sanyue-ImgHub\public\js\nav-hotfix.js`
-- `D:\Dev\Projects\Practice\Sanyue-ImgHub\public\css\nav-hotfix.css`
+- `public/js/nav-hotfix.js`
+- `public/css/nav-hotfix.css`
 
-After syncing those files into this repository, run:
+When navigation hotfix verification is required after syncing, run from this
+repository's root:
 
 ```powershell
 $ErrorActionPreference = 'Stop'

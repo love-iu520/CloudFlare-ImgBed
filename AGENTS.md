@@ -13,7 +13,7 @@
 
 ## 2. 常见任务路由
 
-本项目启用 L2 Project Map。根规则只保留任务类型到稳定模块 / 流程的轻量路由，具体入口由 Context 维护。
+入口或模块关系不清时，按下表定位 [docs/CONTEXT.md](docs/CONTEXT.md) 中的相关模块 / 流程。
 
 | 任务类型 | 优先路由 | 专项说明 |
 |---|---|---|
@@ -80,28 +80,12 @@
 
 ## 6. 项目知识路由
 
-### 6.1 Project Map（L2）
+| 内容 | 入口 |
+|---|---|
+| 模块职责、关系与任务入口 | [docs/CONTEXT.md](docs/CONTEXT.md)，沿用上表的 `MOD-*` / `FLOW-*` |
+| 产品决定、项目偏好与复发问题 | [docs/PROJECT_MEMORY.md](docs/PROJECT_MEMORY.md)，按相关主题或已有作用域定位 |
+| 前后端本地开发 | [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) |
+| 前端产物同步 | [docs/FRONTEND_DIST_SYNC.md](docs/FRONTEND_DIST_SYNC.md) |
+| 数据库迁移 | [database/migrations/README.md](database/migrations/README.md) |
 
-- **入口**：`docs/CONTEXT.md`
-- **作用**：保存当前稳定模块职责、具体任务入口、核心关系、Owner、Source of Truth 和关键流程。
-- **项目路由**：需要结构、入口或调用关系时，按上表的 `MOD-*` / `FLOW-*` 定向读取。
-- **维护**：稳定结构事实变化时更新；不保存命令规则、任务流水或 Memory 决策原因。
-
-### 6.2 Project Memory（L3）
-
-- **入口**：`docs/PROJECT_MEMORY.md`
-- **作用**：只保存 `DECISION`、`PREFERENCE`、`ISSUE`、`RESUME` 四类跨任务历史语义。
-- **项目路由**：需要历史决定、偏好、兼容约束、重复问题或恢复信息时，先查索引，再按 `GLOBAL`、`MOD-*` 或 `FLOW-*` 定位。
-- **维护**：只记录 `DECISION`、`PREFERENCE`、`ISSUE`、`RESUME`；是否写入及维护方式遵循 `PROJECT_AGENTS_WORKFLOW V2`。
-
-### 6.3 专项操作文档
-
-- 前端产物同步：`docs/FRONTEND_DIST_SYNC.md`
-- 数据库迁移：`database/migrations/README.md`
-
-专项文档保存可复用操作细节，不替代 AGENTS 门禁、Context 结构事实或 Memory 历史语义。
-
-## 7. 治理维护
-
-- 治理层创建、升级、拆分、降级和清理遵循 `PROJECT_AGENTS_WORKFLOW V2`；没有实际内容的可选章节不保留。
-- `MOD-*` / `FLOW-*` 职责变化时，同步检查本文件路由和 `PROJECT_MEMORY` 作用域；普通文件移动不改稳定 ID，但应更新 Context 当前路径。
+项目文档的维护与恢复快照规则统一见 [公共工作流](C:/Users/李知恩/.codex/shared/PROJECT_AGENTS_WORKFLOW.md)。

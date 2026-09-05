@@ -160,7 +160,7 @@
 ### FLOW-FRONTEND-SYNC — 前端源码到部署产物
 
 - **目的**：把独立前端仓的源码变更可靠同步为本仓可部署静态产物。
-- **触发 / 入口**：前端界面、交互、`public/` 热修复脚本或样式发生变化。
+- **触发 / 入口**：用户明确要求生产构建、同步部署产物、发布或等价交付动作；修改边界见根 `AGENTS.md`。
 - **参与模块**：`MOD-FRONTEND-DELIVERY` → `MOD-NODE-RUNTIME` / `MOD-WORKER-RUNTIME` / Pages。
 - **稳定主链路**：修改独立前端源码 → 构建 `dist/` → 审查哈希文件和变更范围 → 同步 `frontend-dist/` → 保持相关 gzip 产物一致 → 由各运行时提供静态资源。
 - **关键交接**：本仓 `frontend-dist/` 是构建结果，不反向成为长期源码 Source of Truth。
@@ -195,10 +195,3 @@
 - `MOD-FUNCTIONS` 拥有系统配置和业务语义，`MOD-DATA` 拥有持久化 / 存储写入语义；二者通过适配器边界协作。
 - SQL 新库结构、旧库迁移和运行时防御兼容是三个不同层次。
 - `data/`、`.wrangler/`、Node.js 进程内 Cache 与本地 R2 / SQLite 是运行状态，不是版本化架构配置。
-
-## 7. 维护与拆分
-
-- 只在稳定职责、关系、Owner、Source of Truth、主要位置或关键流程变化时更新本文；任务历史、命令规则、临时错误和决策原因不进入 Context。
-- 普通文件 / 目录移动不创建历史记录，也不因职责未变更换 `MOD-*` / `FLOW-*` ID；保存路径变化时直接更新为当前路径。
-- 创建、替换或删除 `MOD-*` / `FLOW-*` 时，同步检查根 `AGENTS.md` 路由和 `docs/PROJECT_MEMORY.md` 的作用域 / 索引，避免孤儿引用。
-- 默认保持一个根 Context；只有定向读取效率确实下降且模块拥有大量独立稳定知识时，才按 `PROJECT_AGENTS_WORKFLOW V2` 拆分。

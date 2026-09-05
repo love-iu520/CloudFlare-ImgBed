@@ -81,7 +81,7 @@ http://localhost:3000/dashboard
 3. 保存文件后等待 Vue 自动重新编译。
 4. 在 `http://localhost:3000` 刷新或查看热更新结果。
 5. 继续调整时不运行 `npm run build`。
-6. 页面效果确认后，再执行一次生产构建并同步部署产物。
+6. 页面效果确认后，如任务包含构建或同步部署产物，再按第 7 节执行。
 
 仅修改后端 `functions/` 时，通常需要重新启动后端进程；前端进程可以继续保持运行。
 
@@ -129,7 +129,7 @@ npm run start:docker
 
 ## 7. 确认效果后的生产构建
 
-只有准备把前端修改同步到本仓库的 `frontend-dist/` 时，才在 `Sanyue-ImgHub` 根目录运行：
+构建与同步的适用条件见 [项目修改边界](../AGENTS.md#4-项目特有修改边界)。任务已包含对应交付要求时，在 `Sanyue-ImgHub` 根目录运行；同一源码状态已有构建结果时直接复用：
 
 ```powershell
 npm run build
